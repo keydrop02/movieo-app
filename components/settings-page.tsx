@@ -188,6 +188,7 @@ export function SettingsPage() {
   const confirmRef = useRef<HTMLDivElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const historyImportRef = useRef<HTMLInputElement>(null)
+  const dragStateRef = useRef<{ id: string; pointerId: number } | null>(null)
 
   useEffect(() => {
     if (historySuccess === null) return
@@ -383,6 +384,36 @@ export function SettingsPage() {
     writeServerOrder(next)
   }
 
+  const startDrag = (e: React.PointerEvent<HTMLLIElement>, id: string) => {
+    if (dragStateRef.current) return
+    dragStateRef.current = { id, pointerId: e.pointerId }
+    setDragId(id)
+    setOverId(null)
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {}
+  }
+
+  const moveDrag = (e: React.PointerEvent<HTMLLIElement>) => {
+    const drag = dragStateRef.current
+    if (!drag || e.pointerId !== drag.pointerId) return
+    e.preventDefault()
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-provider-id]")
+    const over = el?.dataset.providerId ?? null
+    if (over && over !== drag.id) reorder(drag.id, over)
+    setOverId(over && over !== drag.id ? over : null)
+  }
+
+  const endDrag = (e: React.PointerEvent<HTMLLIElement>) => {
+    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
+    dragStateRef.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+    setDragId(null)
+    setOverId(null)
+  }
+
   const resetServerOrder = () => {
     setOrder([])
     clearServerOrder()
@@ -481,23 +512,13 @@ export function SettingsPage() {
               return (
                 <li
                   key={id}
-                  draggable
-                  onDragStart={() => setDragId(id)}
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    setOverId(id)
-                  }}
-                  onDrop={() => {
-                    if (dragId) reorder(dragId, id)
-                    setDragId(null)
-                    setOverId(null)
-                  }}
-                  onDragEnd={() => {
-                    setDragId(null)
-                    setOverId(null)
-                  }}
+                  data-provider-id={id}
+                  onPointerDown={(e) => startDrag(e, id)}
+                  onPointerMove={moveDrag}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
                   className={cx(
-                    "flex items-center gap-3 h-12 px-3 rounded-xl glass-dropdown theme-glass-drop border transition-colors cursor-grab select-none",
+                    "flex items-center gap-3 h-12 px-3 rounded-xl glass-dropdown theme-glass-drop border transition-colors cursor-grab active:cursor-grabbing touch-none select-none",
                     isDragging ? "opacity-40 border-white/30" : isOver ? "border-[#95ff50]/70" : "border-white/10",
                   )}
                 >
