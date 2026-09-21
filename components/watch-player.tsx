@@ -312,7 +312,7 @@ export function WatchPlayer({
           onLoad={onFrameLoad}
           className="absolute inset-0 w-full h-full"
           allow="autoplay; fullscreen; picture-in-picture"
-          referrerPolicy="no-referrer"
+          referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
           title={title}
         />
