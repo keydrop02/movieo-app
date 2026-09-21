@@ -5,7 +5,7 @@ import { ArrowLeft, Grid3x3, Server } from "lucide-react"
 import type { Season } from "@/lib/tmdb/types"
 import { getEmbedSources, type EmbedSource } from "@/lib/tmdb/embeds"
 import { addHistory, clearProgressPurge, getProgress, isProgressPurged, updateProgress } from "@/lib/watch-store"
-import { orderSources } from "@/lib/server-prefs"
+import { orderSources, clearServerPref, readServerPref, writeServerPref } from "@/lib/server-prefs"
 import { readPrefs } from "@/lib/prefs"
 import { cx } from "@/lib/utils"
 
@@ -83,11 +83,11 @@ export function WatchPlayer({
     if (typeof window === "undefined") return null
     const srcs = buildSources(season, episodeNumber)
     if (isProgressPurged(id, kind)) {
-      localStorage.removeItem("movieo:server")
+      clearServerPref(kind, id)
       return srcs[0] || null
     }
     const fromUrl = new URLSearchParams(window.location.search).get("server")
-    const stored = localStorage.getItem("movieo:server")
+    const stored = readServerPref(kind, id)
     return (fromUrl && srcs.find((s) => s.id === fromUrl)) || (stored && srcs.find((s) => s.id === stored)) || srcs[0] || null
   })
 
@@ -209,7 +209,7 @@ export function WatchPlayer({
     setSource(s)
     setLoading(true)
     setMenuOpen(false)
-    localStorage.setItem("movieo:server", s.id)
+    writeServerPref(kind, id, s.id)
   }
 
   const onFrameLoad = () => {

@@ -22,7 +22,7 @@ import { applyPrefs, DEFAULT_PREFS, PREFS_KEY, readPrefs, writePrefs, type Prefs
 import { clearAllPurges, clearHistory, clearProgress, getHistory, parseHistoryImport, setHistory } from "@/lib/watch-store"
 import { parseListImport, readLists, serializeListFile, writeLists, itemKey } from "@/lib/lists"
 import { getProviders } from "@/lib/tmdb/embeds"
-import { clearServerOrder, readServerOrder, writeServerOrder } from "@/lib/server-prefs"
+import { clearAllServerPrefs, clearServerOrder, readServerOrder, writeServerOrder } from "@/lib/server-prefs"
 
 const THEMES = [
   { id: "default", name: "Default", color: "#ffffff" },
@@ -356,13 +356,13 @@ export function SettingsPage() {
   const resetAll = () => {
     try {
       window.localStorage.removeItem(PREFS_KEY)
-      window.localStorage.removeItem("movieo:server")
       window.localStorage.removeItem("movieo:history")
       window.localStorage.removeItem("movieo:progress")
       window.localStorage.removeItem("movieo:purged")
       window.localStorage.removeItem("cineflick.lists")
     } catch {}
     clearServerOrder()
+    clearAllServerPrefs()
     applyPrefs(DEFAULT_PREFS)
     setPrefs(DEFAULT_PREFS)
     setHistoryCount(0)
