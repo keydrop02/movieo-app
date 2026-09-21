@@ -98,6 +98,10 @@ export function isInList(id: string, item: MediaItem): boolean {
   return !!list && list.items.some((i) => itemKey(i) === itemKey(item))
 }
 
+export function isInAnyList(item: MediaItem): boolean {
+  return readLists().some((l) => l.items.some((i) => itemKey(i) === itemKey(item)))
+}
+
 export type ListFile = {
   app: "cineflick"
   type: "lists"

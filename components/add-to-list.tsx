@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Check, Plus, X } from "lucide-react"
 import type { MediaItem } from "@/lib/tmdb/types"
-import { addToList, createList, isInList, readLists, subscribe, toggleInList, type StoredList } from "@/lib/lists"
+import { addToList, createList, isInAnyList, isInList, readLists, subscribe, toggleInList, type StoredList } from "@/lib/lists"
 import { img } from "@/lib/tmdb/images"
 import { cx } from "@/lib/utils"
 
@@ -59,6 +59,8 @@ export function AddToListPopover({
     setCreating(false)
   }
 
+  const inAny = !!item && isInAnyList(item)
+
   return (
     <div ref={wrapRef} className="relative flex h-full">
       <button
@@ -67,11 +69,15 @@ export function AddToListPopover({
           "flex flex-1 items-center justify-center h-full w-full outline-none",
           triggerClass ?? "px-5 rounded-l-full cursor-pointer transition-colors hover:bg-white/10 active:bg-white/20"
         )}
-        aria-label={label}
+        aria-label={inAny ? "In list" : label}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <Plus className="w-5 h-5 text-white" aria-hidden />
+        {inAny ? (
+          <Check className="w-5 h-5 text-white" strokeWidth={2.75} aria-hidden />
+        ) : (
+          <Plus className="w-5 h-5 text-white" aria-hidden />
+        )}
       </button>
 
       {open && (
