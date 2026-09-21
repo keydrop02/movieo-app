@@ -188,7 +188,22 @@ export function SettingsPage() {
   const confirmRef = useRef<HTMLDivElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const historyImportRef = useRef<HTMLInputElement>(null)
-  const dragStateRef = useRef<{ id: string; pointerId: number } | null>(null)
+  const dragStateRef = useRef<{
+    id: string
+    pointerId: number
+    pointerType: string
+    x: number
+    y: number
+    active: boolean
+  } | null>(null)
+  const holdTimerRef = useRef<number | null>(null)
+
+  const clearHold = () => {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }
 
   useEffect(() => {
     if (historySuccess === null) return
@@ -385,18 +400,46 @@ export function SettingsPage() {
   }
 
   const startDrag = (e: React.PointerEvent<HTMLLIElement>, id: string) => {
-    if (dragStateRef.current) return
-    dragStateRef.current = { id, pointerId: e.pointerId }
-    setDragId(id)
-    setOverId(null)
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId)
-    } catch {}
+    const pointerId = e.pointerId
+    const pointerType = e.pointerType
+    if (e.button !== 0 && pointerType === "mouse") return
+    clearHold()
+    const el = e.currentTarget
+    if (pointerType === "mouse") {
+      dragStateRef.current = { id, pointerId, pointerType, x: e.clientX, y: e.clientY, active: true }
+      setDragId(id)
+      setOverId(null)
+      try {
+        el.setPointerCapture(pointerId)
+      } catch {}
+      return
+    }
+    dragStateRef.current = { id, pointerId, pointerType, x: e.clientX, y: e.clientY, active: false }
+    holdTimerRef.current = window.setTimeout(() => {
+      holdTimerRef.current = null
+      if (!dragStateRef.current || dragStateRef.current.pointerId !== pointerId || dragStateRef.current.active) return
+      dragStateRef.current.active = true
+      setDragId(id)
+      setOverId(null)
+      try {
+        document.body.style.touchAction = "none"
+      } catch {}
+      try {
+        el.setPointerCapture(pointerId)
+      } catch {}
+    }, 350)
   }
 
   const moveDrag = (e: React.PointerEvent<HTMLLIElement>) => {
     const drag = dragStateRef.current
     if (!drag || e.pointerId !== drag.pointerId) return
+    if (!drag.active) {
+      if (Math.abs(e.clientX - drag.x) > 10 || Math.abs(e.clientY - drag.y) > 10) {
+        clearHold()
+        dragStateRef.current = null
+      }
+      return
+    }
     e.preventDefault()
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-provider-id]")
     const over = el?.dataset.providerId ?? null
@@ -405,8 +448,13 @@ export function SettingsPage() {
   }
 
   const endDrag = (e: React.PointerEvent<HTMLLIElement>) => {
-    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
+    const drag = dragStateRef.current
+    if (!drag || e.pointerId !== drag.pointerId) return
+    clearHold()
     dragStateRef.current = null
+    try {
+      if (drag.active) document.body.style.touchAction = ""
+    } catch {}
     try {
       e.currentTarget.releasePointerCapture(e.pointerId)
     } catch {}
@@ -517,9 +565,14 @@ export function SettingsPage() {
                   onPointerMove={moveDrag}
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
+                  onContextMenu={(e) => e.preventDefault()}
                   className={cx(
-                    "flex items-center gap-3 h-12 px-3 rounded-xl glass-dropdown theme-glass-drop border transition-colors cursor-grab active:cursor-grabbing touch-none select-none",
-                    isDragging ? "opacity-40 border-white/30" : isOver ? "border-[#95ff50]/70" : "border-white/10",
+                    "relative flex items-center gap-3 h-12 px-3 rounded-xl glass-dropdown theme-glass-drop border transition-[transform,border-color,background-color,box-shadow] duration-150 will-change-transform cursor-grab active:cursor-grabbing select-none",
+                    isDragging
+                      ? "scale-[1.05] bg-white/10 border-white/40 shadow-[0_10px_30px_rgba(0,0,0,0.45)] z-10"
+                      : isOver
+                        ? "border-[#95ff50]/70 bg-white/[0.06] scale-[1.02]"
+                        : "border-white/10",
                   )}
                 >
                   <GripVertical className="w-4 h-4 text-white/40 shrink-0" />

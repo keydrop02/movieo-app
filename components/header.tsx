@@ -179,10 +179,10 @@ function MobileBar({
     { href: "/lists", label: "My List", Icon: Bookmark },
   ]
   const btn =
-    "relative flex items-center justify-center w-[12vw] max-w-[52px] h-10 rounded-full transition-colors duration-300"
+    "relative flex items-center justify-center w-[13vw] max-w-[56px] h-10 rounded-full transition-colors duration-300"
   const searchActive = pathname === "/search"
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center h-16 px-3 rounded-full shadow-2xl glass-dropdown mobile-nav-bar gap-1">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center h-16 px-3.5 rounded-full shadow-2xl glass-dropdown mobile-nav-bar gap-1">
       {items.map(({ href, label, Icon }) => {
         const active = isNavActive(pathname, href)
         return (
