@@ -1,0 +1,16 @@
+{
+  "name": "Movieo",
+  "short_name": "Movieo",
+  "description": "Movieo - the ultimate destination for movies and TV shows. Stream or download your favorite titles in high quality.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#95FF50",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
