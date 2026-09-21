@@ -38,7 +38,9 @@ export function SettingsMenu({
       if (e.key === "Escape") onClose()
     }
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+      const t = e.target as Node | null
+      if (t instanceof Element && t.closest("[data-profile-trigger]")) return
+      if (ref.current && !ref.current.contains(t)) onClose()
     }
     document.addEventListener("keydown", onKey)
     document.addEventListener("mousedown", onClick)
@@ -52,14 +54,14 @@ export function SettingsMenu({
 
   return (
     <div ref={ref}>
-      <div className="profile-portal-menu fixed z-[2147483000] w-56 rounded-xl glass-dropdown theme-glass-drop overflow-hidden flex flex-col py-1 pointer-events-auto hidden lg:flex"
+      <div className="profile-portal-menu fixed z-[2147483000] w-56 rounded-xl glass-dropdown theme-glass-drop overflow-hidden flex flex-col py-1 pointer-events-none hidden lg:flex"
         style={pos}
       >
         {items("px-4 py-2.5", onClose)}
       </div>
       <div
         role="none"
-        className="fixed left-1/2 -translate-x-1/2 w-56 rounded-2xl overflow-hidden flex flex-col py-1 z-[60] pointer-events-auto theme-glass-tint backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-2xl mobile-profile-menu lg:hidden"
+        className="fixed left-1/2 -translate-x-1/2 w-56 rounded-2xl overflow-hidden flex flex-col py-1 z-[60] pointer-events-none theme-glass-tint backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-2xl mobile-profile-menu lg:hidden"
       >
         {items("px-4 py-3", onClose)}
       </div>
@@ -76,7 +78,7 @@ function items(cls: string, onClose: () => void) {
             href={href}
             onClick={onClose}
             className={cx(
-              "flex items-center gap-3 text-sm text-white/90 hover:bg-white/10 transition-colors text-left w-full",
+              "flex items-center gap-3 text-sm text-white/90 hover:bg-white/10 transition-colors text-left w-full pointer-events-auto",
               cls,
             )}
           >

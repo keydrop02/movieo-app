@@ -44,7 +44,7 @@ export function ProviderExplorer({
         {data ? (
           <GridWithFetch key={query} query={query} initialItems={data.items} initialTotalPages={data.totalPages} />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-6">
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="animate-pulse aspect-[2/3] rounded-xl bg-white/[0.06]" />
             ))}
