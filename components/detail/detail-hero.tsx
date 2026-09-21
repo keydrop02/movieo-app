@@ -1,12 +1,13 @@
 import Link from "next/link"
-import { Download, Play, Star } from "lucide-react"
+import { Download, Play } from "lucide-react"
 import { AddToListPopover } from "@/components/add-to-list"
 import { DownloadModal } from "@/components/download-modal"
 import { WatchedButton } from "@/components/detail/watched-button"
 import { PillButton } from "@/components/pill"
+import { RateStar } from "@/components/rate-star"
 import { img } from "@/lib/tmdb/images"
 import type { MediaDetail, Person } from "@/lib/tmdb/types"
-import { cx, formatRuntimeLong, year } from "@/lib/utils"
+import { cx, formatRuntimeLong, rateColor, year } from "@/lib/utils"
 
 export function DetailHero({
   detail,
@@ -42,7 +43,7 @@ export function DetailHero({
 
           <div className="mt-4 lg:mt-5 w-full flex flex-wrap items-center gap-x-3 gap-y-1 text-sm lg:text-base text-white/80 font-medium justify-center lg:justify-start">
             <span className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-yellow-400 fill-current" />
+              <RateStar color={rateColor(detail.vote_average)} className="w-4 h-4" />
               {detail.vote_average.toFixed(1)}
             </span>
             <span>{year(detail.release_date)}</span>

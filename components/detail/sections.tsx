@@ -1,10 +1,40 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
-import { ChevronLeft, ChevronRight, Play, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { ChevronLeft, ChevronRight, ExternalLink, Play, X } from "lucide-react"
 import { img } from "@/lib/tmdb/images"
 import type { Person, Video } from "@/lib/tmdb/types"
+
+declare global {
+  interface Window {
+    YT: {
+      Player: new (div: HTMLElement, opts: Record<string, unknown>) => {
+        mute: () => void
+        unMute: () => void
+        destroy: () => void
+        onError?: (e: { data?: number }) => void
+      }
+    }
+    onYouTubeIframeAPIReady: () => void
+  }
+}
+
+let ytApiPromise: Promise<void> | null = null
+function loadYtApi() {
+  if (ytApiPromise) return ytApiPromise
+  ytApiPromise = new Promise<void>((resolve) => {
+    if (typeof window === "undefined") return resolve()
+    if (window.YT?.Player) return resolve()
+    const tag = document.createElement("script")
+    tag.src = "https://www.youtube.com/iframe_api"
+    document.head.appendChild(tag)
+    window.onYouTubeIframeAPIReady = () => resolve()
+  })
+  return ytApiPromise
+}
+
+const EMBED_DISALLOWED = new Set([101, 150])
 
 export function SectionHeading({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xl lg:text-2xl font-bold text-white/90 px-2">{children}</h2>
@@ -85,6 +115,8 @@ export function TrailersSection({ videos }: { videos: Video[] }) {
 
 function TrailerCard({ video }: { video: Video }) {
   const [open, setOpen] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  const playerHostRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -99,10 +131,35 @@ function TrailerCard({ video }: { video: Video }) {
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open || !playerHostRef.current) return
+    let player: { destroy: () => void } | null = null
+    let cancelled = false
+    loadYtApi().then(() => {
+      if (cancelled || !playerHostRef.current) return
+      player = new window.YT.Player(playerHostRef.current, {
+        videoId: video.key,
+        playerVars: { autoplay: 1, rel: 0 },
+        events: {
+          onError: () => {
+            if (!cancelled) setBlocked(true)
+          },
+        },
+      })
+    })
+    return () => {
+      cancelled = true
+      player?.destroy()
+    }
+  }, [open, video.key])
+
   return (
     <div className="flex-none w-80 lg:w-[420px]">
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setBlocked(false)
+          setOpen(true)
+        }}
         className="relative w-full aspect-video rounded-xl overflow-hidden bg-black/20 border border-white/5 group cursor-pointer block"
         aria-label={video.name}
       >
@@ -134,13 +191,22 @@ function TrailerCard({ video }: { video: Video }) {
               <X className="w-5 h-5" />
             </button>
             <div className="relative aspect-video rounded-xl overflow-hidden bg-black shadow-2xl">
-              <iframe
-                className="absolute inset-0 w-full h-full"
-                src={`https://www.youtube-nocookie.com/embed/${video.key}?autoplay=1`}
-                title={video.name}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+              {blocked ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                  <p className="text-white/60 text-sm">This trailer can&apos;t be played in the embedded player.</p>
+                  <a
+                    href={`https://www.youtube.com/watch?v=${video.key}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-sm font-semibold hover:bg-white/90 hover:scale-105 transition-all cursor-pointer"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Watch on YouTube
+                  </a>
+                </div>
+              ) : (
+                <div ref={playerHostRef} className="absolute inset-0 w-full h-full" />
+              )}
             </div>
           </div>
         </div>

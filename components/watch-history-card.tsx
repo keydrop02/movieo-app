@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Play, Star } from "lucide-react"
+import { Play } from "lucide-react"
 import { getProgress, timeAgo, type HistoryEntry, type Progress } from "@/lib/watch-store"
 import { img } from "@/lib/tmdb/images"
-import { year } from "@/lib/utils"
+import { rateColor, year } from "@/lib/utils"
+import { RateStar } from "@/components/rate-star"
 
 export function watchHref(entry: HistoryEntry, p?: Progress): string {
   if (entry.type === "movie") {
@@ -60,7 +61,7 @@ export function WatchHistoryCard({
               {entry.release_date ? <span>{year(entry.release_date)}</span> : null}
               {entry.vote_average > 0 && (
                 <span className="flex items-center gap-0.5">
-                  <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                  <RateStar color={rateColor(entry.vote_average)} className="w-3 h-3" />
                   {entry.vote_average.toFixed(1)}
                 </span>
               )}

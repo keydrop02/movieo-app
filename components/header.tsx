@@ -10,7 +10,7 @@ import { cx } from "@/lib/utils"
 const DESKTOP_LINKS: Array<{ href: string; label: string }> = [
   { href: "/", label: "Home" },
   { href: "/movies", label: "Movies" },
-  { href: "/series", label: "Shows" },
+  { href: "/series", label: "TV Shows" },
   { href: "/lists", label: "My List" },
 ]
 
@@ -87,15 +87,16 @@ export function Header() {
               )}
             >
               <span className="flex">
-                {l.href === "/" ? (
-                  <House className="w-[18px] h-[18px]" />
-                ) : l.href === "/movies" ? (
-                  <Clapperboard className="w-[18px] h-[18px]" />
-                ) : l.href === "/series" ? (
-                  <Tv className="w-[18px] h-[18px]" />
-                ) : (
-                  <Bookmark className="w-[18px] h-[18px]" />
-                )}
+                {itemActive &&
+                  (l.href === "/" ? (
+                    <House className="w-[18px] h-[18px]" />
+                  ) : l.href === "/movies" ? (
+                    <Clapperboard className="w-[18px] h-[18px]" />
+                  ) : l.href === "/series" ? (
+                    <Tv className="w-[18px] h-[18px]" />
+                  ) : (
+                    <Bookmark className="w-[18px] h-[18px]" />
+                  ))}
               </span>
               {l.label}
             </Link>
@@ -155,7 +156,7 @@ function MobileBar({ pathname, onOpenSettings }: { pathname: string; onOpenSetti
   const items = [
     { href: "/", label: "Home", Icon: House },
     { href: "/movies", label: "Movies", Icon: Clapperboard },
-    { href: "/series", label: "Shows", Icon: Tv },
+    { href: "/series", label: "TV Shows", Icon: Tv },
     { href: "/lists", label: "My List", Icon: Bookmark },
   ]
   const btn =

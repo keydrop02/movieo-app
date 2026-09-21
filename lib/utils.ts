@@ -43,3 +43,9 @@ export function endsAtTime(startMinutes: number, runtime: number | null): string
   while (end < now.getTime()) end += 24 * 60 * 60_000
   return new Date(end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toUpperCase().replace(" ", " ")
 }
+
+export function rateColor(value: number): string {
+  if (value >= 7) return "#4ade80"
+  if (value >= 5) return "#facc15"
+  return "#f87171"
+}

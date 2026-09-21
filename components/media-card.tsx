@@ -1,9 +1,10 @@
 import Link from "next/link"
-import { Play, Star } from "lucide-react"
-import { mediaUrl, year } from "@/lib/utils"
+import { Play } from "lucide-react"
+import { mediaUrl, year, rateColor } from "@/lib/utils"
 import { poster, backdrop, img } from "@/lib/tmdb/images"
 import type { MediaItem } from "@/lib/tmdb/types"
 import { cx } from "@/lib/utils"
+import { RateStar } from "@/components/rate-star"
 
 export type CardBadge = {
   text?: string
@@ -45,7 +46,7 @@ export function MediaCard({
         />
         {rating && (
           <span className="absolute top-2 left-2 lg:hidden px-2 py-0.5 flex items-center gap-1 text-[10px] font-semibold rounded-full bg-black/60 border border-white/20 text-white backdrop-blur-md z-10">
-            <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
+            <RateStar color={rateColor(item.vote_average)} className="w-2.5 h-2.5" />
             {rating}
           </span>
         )}
@@ -65,7 +66,7 @@ export function MediaCard({
               <span>{year(item.release_date)}</span>
               {rating && (
                 <span className="flex items-center gap-0.5">
-                  <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                  <RateStar color={rateColor(item.vote_average)} className="w-3 h-3" />
                   {rating}
                 </span>
               )}

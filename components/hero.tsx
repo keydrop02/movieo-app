@@ -5,8 +5,9 @@ import Link from "next/link"
 import { CalendarDays, Film, Info, Play } from "lucide-react"
 import { img } from "@/lib/tmdb/images"
 import type { MediaItem } from "@/lib/tmdb/types"
-import { cx, year } from "@/lib/utils"
+import { cx, year, rateColor } from "@/lib/utils"
 import { AddToListPopover } from "@/components/add-to-list"
+import { RateStar } from "@/components/rate-star"
 
 export function HeroCarousel({
   items,
@@ -148,7 +149,7 @@ function HeroTitle({ slide, src }: { slide: MediaItem; src: string | null | unde
 export function HeroRating({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-1.5">
-      <StarIcon />
+      <RateStar color={rateColor(value)} className="w-4 h-4 lg:w-[18px] lg:h-[18px]" />
       <span className="text-white font-semibold">
         {value.toFixed(1)}
         <span className="text-white/60 font-medium">/10</span>
@@ -182,8 +183,4 @@ function IconChip({ Icon, text }: { Icon: typeof Film; text: string }) {
       <span className="text-white">{text}</span>
     </div>
   )
-}
-
-function StarIcon() {
-  return <svg className="w-4 h-4 fill-yellow-400 text-yellow-400" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" /></svg>
 }

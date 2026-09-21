@@ -5,6 +5,7 @@ import { BackgroundLayer } from "@/components/background"
 import { Header } from "@/components/header"
 import { ConditionalFooter } from "@/components/conditional-footer"
 import { SettingsProvider } from "@/components/settings-provider"
+import { ScrollTopButton } from "@/components/scroll-top-button"
 import "./globals.css"
 
 const inter = Inter({
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Header />
           <div className="relative z-10 flex-1">{children}</div>
           <ConditionalFooter />
+          <ScrollTopButton />
         </div>
       </body>
     </html>

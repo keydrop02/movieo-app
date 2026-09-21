@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Play, Volume2, VolumeX, Info, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react"
 import type { MediaItem, Video } from "@/lib/tmdb/types"
-import { mediaUrl } from "@/lib/utils"
+import { mediaUrl, rateColor } from "@/lib/utils"
 import Link from "next/link"
 
 interface ShortItem extends MediaItem {
@@ -14,10 +14,11 @@ interface ShortItem extends MediaItem {
 declare global {
   interface Window {
     YT: {
-      Player: new (div: HTMLDivElement, opts: Record<string, unknown>) => {
+      Player: new (div: HTMLElement, opts: Record<string, unknown>) => {
         mute: () => void
         unMute: () => void
         destroy: () => void
+        onError?: (e: { data?: number }) => void
       }
     }
     onYouTubeIframeAPIReady: () => void
@@ -251,7 +252,7 @@ function ShortCard({
             <p className="text-white/55 text-xs mt-1.5 line-clamp-2 leading-relaxed">{item.overview}</p>
             <div className="flex items-center gap-2.5 mt-2.5">
               {item.vote_average > 0 && (
-                <span className="text-yellow-400 text-[11px] font-semibold">★ {item.vote_average.toFixed(1)}</span>
+                <span className="text-[11px] font-semibold" style={{ color: rateColor(item.vote_average) }}>★ {item.vote_average.toFixed(1)}</span>
               )}
               {item.release_date && (
                 <span className="text-white/35 text-[11px]">{item.release_date.slice(0, 4)}</span>
