@@ -50,7 +50,7 @@ export function GridWithFetch({
 
 function defaultGrid(items: MediaItem[]) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12">
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-6">
       {items.map((item, i) => (
         <div key={item.id} className="card-in" style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
           <MediaCard item={item} fill />
