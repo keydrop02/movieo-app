@@ -10,17 +10,17 @@
   "theme_color": "#95FF50",
   "icons": [
     {
-      "src": "/icons/icon-96.png",
+      "src": "/icons/icon-512-maskable.png",
       "sizes": "96x96",
       "type": "image/png"
     },
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/icon-512-maskable.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png"
     },
