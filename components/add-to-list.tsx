@@ -62,7 +62,7 @@ export function AddToListPopover({
   const inAny = !!item && isInAnyList(item)
 
   return (
-    <div ref={wrapRef} className="relative flex h-full">
+    <div ref={wrapRef} className="relative flex h-full w-full">
       <button
         type="button"
         className={cx(

@@ -79,15 +79,20 @@ export function HeroCarousel({
             >
               <PlayButton />
             </Link>
-            <div className="hero-action-pill inline-flex items-center h-[52px] shrink-0 rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5">
-              <AddToListPopover label="Add to list" item={slide} />
-              <div className="w-px h-6 bg-white/25 shrink-0" />
+            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5">
+              <AddToListPopover
+                label="Add to list"
+                item={slide}
+                triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
+              />
+            </div>
+            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5">
               <Link
                 href={slide.kind === "movie" ? `/movie/${slide.id}` : `/series/${slide.id}`}
-                className="group/btn flex items-center justify-center h-full px-5 rounded-r-full transition-colors hover:bg-white/10 active:bg-white/20 outline-none cursor-pointer"
+                className="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
                 aria-label="More Info"
               >
-                <Info className="w-5 h-5 text-white" />
+                <Info className="w-[18px] h-[18px] text-white" />
               </Link>
             </div>
           </div>
