@@ -107,6 +107,14 @@ export interface MediaDetail extends MediaItem {
   homepage?: string | null
   budget?: number
   revenue?: number
+  production_companies?: Company[]
+}
+
+export interface Company {
+  id: number
+  name: string
+  logo_path: string | null
+  origin_country?: string
 }
 
 export interface TmdbConfiguration {

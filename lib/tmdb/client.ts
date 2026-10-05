@@ -187,21 +187,32 @@ function pickTrailers(videos: any[]): any[] {
     .slice(0, 6)
 }
 
-function pickTitleLogo(images?: { logos?: Array<{ iso_639_1?: string | null; width?: number; aspect_ratio?: number; file_path?: string }> }) {
-  const logos = [...(images?.logos ?? [])]
-    .filter((l) => l.iso_639_1 === "en")
-    .sort((a, b) => (b.width ?? 0) - (a.width ?? 0) || (b.aspect_ratio ?? 0) - (a.aspect_ratio ?? 0))
-  return logos[0]?.file_path ?? null
+function pickTitleLogo(images?: {
+  logos?: Array<{
+    iso_639_1?: string | null
+    width?: number
+    aspect_ratio?: number
+    file_path?: string
+    vote_average?: number
+    vote_count?: number
+  }>
+}) {
+  const logos = images?.logos ?? []
+  return [...logos].sort(
+    (a, b) =>
+      (b.vote_average ?? 0) - (a.vote_average ?? 0) ||
+      (b.vote_count ?? 0) - (a.vote_count ?? 0) ||
+      (b.width ?? 0) - (a.width ?? 0) ||
+      (b.aspect_ratio ?? 0) - (a.aspect_ratio ?? 0),
+  )[0]?.file_path ?? null
 }
 
 export async function getTitleLogos(items: Array<{ id: number; kind: MediaKind }>): Promise<Record<number, string | null>> {
   const res = await Promise.all(
     items.map(async ({ id, kind }) => {
       try {
-        const { images } = await tmdb<{ images?: { logos?: Array<Record<string, any>> } }>(`/${kind}/${id}`, {
-          append_to_response: "images",
-        })
-        return [id, pickTitleLogo(images)] as const
+        const { logos } = await tmdb<{ logos?: Array<Record<string, any>> }>(`/${kind}/${id}/images`)
+        return [id, pickTitleLogo({ logos })] as const
       } catch {
         return [id, null] as const
       }
@@ -429,6 +440,10 @@ export async function getDetail(kind: MediaKind, id: number): Promise<MediaDetai
     homepage: raw.homepage || null,
     budget: raw.budget,
     revenue: raw.revenue,
+    production_companies: (raw.production_companies ?? [])
+      .filter((c: any) => c.logo_path)
+      .slice(0, 2)
+      .map((c: any) => ({ id: c.id, name: c.name, logo_path: c.logo_path ?? null, origin_country: c.origin_country })),
   }
 
   if (detail.collection) {
