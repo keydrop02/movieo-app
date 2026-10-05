@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Play, RotateCcw } from "lucide-react"
+import { RotateCcw } from "lucide-react"
 import { FilterDropdown, type DropOption } from "@/components/filter-dropdown"
 import { MediaCard, SpotlightCard } from "@/components/media-card"
+import { ScrollRail } from "@/components/scroll-rail"
 import type { MediaItem } from "@/lib/tmdb/types"
 import { cx, mediaUrl } from "@/lib/utils"
 
@@ -232,26 +233,15 @@ export function ExploreGrid({
                       {kind === "movie" ? "Upcoming" : "New Seasons Airing"}
                     </h2>
                   </div>
-                  <div className="relative">
-                    <button aria-label="Scroll left" className="hidden lg:flex absolute -left-2 top-1/2 -translate-y-1/2 z-[60] w-12 h-12 bg-transparent drop-shadow-lg transition-all duration-300 items-center justify-center hover:scale-110 cursor-pointer opacity-0 pointer-events-none">
-                      <Play className="w-10 h-10 text-white drop-shadow-md -scale-x-100" />
-                    </button>
-                    <div
-                      className="flex gap-3 sm:gap-4 overflow-x-auto overflow-y-clip pt-4 pb-0 sm:pb-12 scrollbar-hide items-start isolate"
-                      style={{
-                        maskImage: "linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%)",
-                        WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 4%, black 96%, transparent 100%)",
-                      }}
-                    >
-                      {spotlight.map((item) => (
-                        <SpotlightCard
-                          key={item.id}
-                          item={item}
-                          badge={kind === "movie" ? "Coming Soon" : `Season ${item.vote_count ? "3" : "4"}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <ScrollRail mask insetClass="-left-2" endInsetClass="-right-2" className="gap-3 sm:gap-4 pt-4 pb-0 sm:pb-12">
+                    {spotlight.map((item) => (
+                      <SpotlightCard
+                        key={item.id}
+                        item={item}
+                        badge={kind === "movie" ? "Coming Soon" : `Season ${item.vote_count ? "3" : "4"}`}
+                      />
+                    ))}
+                  </ScrollRail>
                 </div>
               </div>
             )}

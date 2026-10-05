@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, ExternalLink, Play, X } from "lucide-react"
+import { ExternalLink, Play, X } from "lucide-react"
+import { ScrollRail } from "@/components/scroll-rail"
 import { img } from "@/lib/tmdb/images"
 import type { Person, Video } from "@/lib/tmdb/types"
 
@@ -49,10 +50,8 @@ export function CastSection({ cast }: { cast: Person[] }) {
   return (
     <Section>
       <SectionHeading>Cast</SectionHeading>
-      <div className="relative group/cast">
-        <CastScroll group="cast" />
-        <div data-scroll="cast" className="flex gap-4 overflow-x-auto py-2 px-2 scrollbar-hide items-start">
-          {cast.map((p) => (
+      <ScrollRail insetClass="-left-3" endInsetClass="-right-3" className="gap-4 py-2 px-2">
+        {cast.map((p) => (
             <Link key={p.id} href={`/person/${p.id}`} className="flex flex-col items-center gap-3 flex-none w-32 lg:w-36 group cursor-pointer text-left">
               <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-white/5 border border-white/10 shadow-lg transition-transform duration-300 group-hover:scale-110 group-hover:border-white/30 group-hover:shadow-white/20 z-10">
                 {p.profile_path ? (
@@ -67,32 +66,8 @@ export function CastSection({ cast }: { cast: Person[] }) {
               </div>
             </Link>
           ))}
-        </div>
-      </div>
+      </ScrollRail>
     </Section>
-  )
-}
-
-function CastScroll({ group, dist = 340 }: { group: string; dist?: number }) {
-  const el = () => document.querySelector<HTMLElement>(`[data-scroll="${group}"]`)
-  const scrollBy = (dir: 1 | -1) => () => el()?.scrollBy({ left: dir * dist, behavior: "smooth" })
-  return (
-    <>
-      <button
-        onClick={scrollBy(-1)}
-        aria-label="Scroll left"
-        className="hidden lg:flex absolute -left-3 top-[42%] -translate-y-1/2 z-[60] w-10 h-10 items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-white/10 transition-all opacity-0 group-hover/cast:opacity-100 pointer-events-none group-hover/cast:pointer-events-auto cursor-pointer"
-      >
-        <ChevronLeft className="w-5 h-5" />
-      </button>
-      <button
-        onClick={scrollBy(1)}
-        aria-label="Scroll right"
-        className="hidden lg:flex absolute -right-3 top-[42%] -translate-y-1/2 z-[60] w-10 h-10 items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-white/10 transition-all opacity-0 group-hover/cast:opacity-100 pointer-events-none group-hover/cast:pointer-events-auto cursor-pointer"
-      >
-        <ChevronRight className="w-5 h-5" />
-      </button>
-    </>
   )
 }
 
@@ -104,11 +79,11 @@ export function TrailersSection({ videos }: { videos: Video[] }) {
   return (
     <Section>
       <SectionHeading>Trailers</SectionHeading>
-      <div className="flex gap-5 overflow-x-auto pt-2 px-2 scrollbar-hide">
+      <ScrollRail insetClass="-left-3" endInsetClass="-right-3" className="gap-5 py-2 px-2">
         {trailers.map((v) => (
           <TrailerCard key={v.id} video={v} />
         ))}
-      </div>
+      </ScrollRail>
     </Section>
   )
 }
