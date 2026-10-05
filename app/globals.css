@@ -17,8 +17,8 @@
 --nav-item-h: 46px;
 
   --theme-root-bg: #0b0f19;
-  --theme-global-accentA: #95ff50;
-  --theme-global-accentB: #b7ff7f;
+  --theme-global-accentA: #e8e8ea;
+  --theme-global-accentB: #ffffff;
   --theme-progress-accent: #ffffff;
   --theme-accent-contrast: #050505;
   --flat-surface: #050505;
@@ -43,7 +43,7 @@ html {
 }
 
 ::selection {
-  background: #95ff5033;
+  background: #ffffff33;
   color: #fff;
 }
 
@@ -84,19 +84,15 @@ html.route-watch footer {
 /* ============================================================
    GLASS SURFACES
    ============================================================ */
-.mobile-nav-bar {
-  background: #0f0f0fb8;
-}
-html[data-theme]:not([data-theme="default"]) .mobile-nav-bar {
-  background: #0f0f0fb8 !important;
-}
-
 .glass-dropdown {
-  background: #0f0f0fb8;
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 50px #00000080;
+  background: color-mix(in srgb, var(--theme-root-bg, #0b0f19) 40%, transparent);
+  backdrop-filter: blur(48px) saturate(190%);
+  -webkit-backdrop-filter: blur(48px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 20px 50px #00000080;
   isolation: isolate;
   will-change: backdrop-filter;
 }
@@ -107,11 +103,14 @@ html[data-theme]:not([data-theme="default"]) .glass-dropdown {
 
 .glass-panel,
 .list-card {
-  background: #14141499;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--theme-root-bg, #0b0f19) 34%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 20px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 32px #00000066;
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
 }
 html[data-theme]:not([data-theme="default"]) .glass-panel,
 html[data-theme]:not([data-theme="default"]) .list-card {
@@ -217,16 +216,18 @@ html[data-theme]:not([data-theme="default"]) .glass-card {
   background-color: #fff;
 }
 .theme-glass-tint {
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  background: #14141459;
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
+  backdrop-filter: blur(40px) saturate(190%);
+  background: color-mix(in srgb, var(--theme-root-bg, #0b0f19) 26%, transparent);
 }
 .theme-glass-drop {
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
-  background: #14141466;
-  border: 1px solid #ffffff1a;
-  box-shadow: 0 20px 50px #00000080;
+  -webkit-backdrop-filter: blur(48px) saturate(190%);
+  backdrop-filter: blur(48px) saturate(190%);
+  background: color-mix(in srgb, var(--theme-root-bg, #0b0f19) 32%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 20px 50px #00000080;
 }
 .theme-glass-tint-active {
   background: #fff3;
@@ -655,7 +656,7 @@ html[data-theme]:not([data-theme="default"]) .hero-action-pill {
 .vote-btn.is-up,
 .vote-score.is-up,
 .split-btn.is-up {
-  color: #95ff50;
+  color: #e8e8ea;
 }
 .vote-btn.is-down,
 .vote-score.is-down,
@@ -689,7 +690,7 @@ html[data-theme]:not([data-theme="default"]) .split-btn.is-up {
   color: #fff;
 }
 .sort-menu button.is-active {
-  color: #95ff50;
+  color: #e8e8ea;
 }
 html[data-theme]:not([data-theme="default"]) .sort-menu button.is-active {
   color: var(--theme-global-accentA);
@@ -754,7 +755,7 @@ html[data-theme]:not([data-theme="default"]) .you-chip {
   color: var(--theme-global-accentA);
 }
 .mention {
-  color: #95ff50;
+  color: #e8e8ea;
   font-weight: 600;
 }
 html[data-theme]:not([data-theme="default"]) .mention {
@@ -799,7 +800,7 @@ html[data-theme]:not([data-theme="default"]) .replies {
   color: #ffffff73;
 }
 .more-replies:hover {
-  color: #95ff50;
+  color: #e8e8ea;
 }
 html[data-theme]:not([data-theme="default"]) .more-replies:hover {
   color: var(--theme-global-accentA);

@@ -571,7 +571,7 @@ export function SettingsPage() {
                     isDragging
                       ? "scale-[1.05] bg-white/10 border-white/40 shadow-[0_10px_30px_rgba(0,0,0,0.45)] z-10"
                       : isOver
-                        ? "border-[#95ff50]/70 bg-white/[0.06] scale-[1.02]"
+                        ? "border-white/45 bg-white/[0.06] scale-[1.02]"
                         : "border-white/10",
                   )}
                 >

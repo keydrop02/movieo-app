@@ -314,7 +314,7 @@ export function DownloadModal({
                     aria-label="Copy link"
                     className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer shrink-0"
                   >
-                    {copied === l.url ? <Check className="w-4 h-4 text-[#95ff50]" /> : <Copy className="w-4 h-4" />}
+                    {copied === l.url ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={() => doDownload(l)}
