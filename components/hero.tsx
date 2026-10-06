@@ -94,17 +94,17 @@ export function HeroCarousel({
             >
               <PlayButton />
             </Link>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-(--surface-elevated) border border-white/25 shadow-lg shadow-black/5">
               <AddToListPopover
                 label="Add to list"
                 item={slide}
-                triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
+                triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-(--surface-hover) active:bg-(--surface-hover) outline-none cursor-pointer"
               />
             </div>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-(--surface-elevated) border border-white/25 shadow-lg shadow-black/5">
               <Link
                 href={mediaUrl(slide)}
-                className="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
+                className="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-(--surface-hover) active:bg-(--surface-hover) outline-none cursor-pointer"
                 aria-label="More Info"
               >
                 <Info className="w-[18px] h-[18px] text-white" />

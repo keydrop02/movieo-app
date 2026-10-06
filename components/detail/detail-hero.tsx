@@ -86,17 +86,17 @@ export function DetailHero({
               }
               className="px-5 min-w-[112px] text-base"
             />
-            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5 shrink-0">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-(--surface-elevated) border border-white/25 shadow-lg shadow-black/5 shrink-0">
               <AddToListPopover
                 label="Add to list"
                 item={detail}
-                triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
+                triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-(--surface-hover) active:bg-(--surface-hover) outline-none cursor-pointer"
               />
             </div>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5 shrink-0">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-(--surface-elevated) border border-white/25 shadow-lg shadow-black/5 shrink-0">
               <DownloadTrigger item={detail} />
             </div>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5 shrink-0">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-(--surface-elevated) border border-white/25 shadow-lg shadow-black/5 shrink-0">
               <WatchedButton id={detail.id} kind={detail.kind} />
             </div>
           </div>
@@ -239,7 +239,7 @@ function DownloadTrigger({ item }: { item: MediaDetail }) {
     <DownloadModal
       item={{ id: item.id, kind: item.kind, title: item.title, seasons: item.seasons ?? [] }}
       label="Download"
-      triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
+      triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-(--surface-hover) active:bg-(--surface-hover) outline-none cursor-pointer"
     >
       <Download className="w-[18px] h-[18px] text-white" />
     </DownloadModal>

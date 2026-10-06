@@ -52,7 +52,7 @@ export function WatchedButton({ id, kind }: { id: number; kind: "movie" | "tv" }
         onClick={toggle}
         aria-label={watched ? "Mark as not watched" : "Mark watched"}
         title={watched ? "Mark as not watched" : "Mark watched"}
-        className="group/btn flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
+        className="group/btn flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-(--surface-hover) active:bg-(--surface-hover) outline-none cursor-pointer"
       >
         {watched ? (
           <Eye className="w-[18px] h-[18px] text-white" />

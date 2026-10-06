@@ -648,10 +648,10 @@ html.route-watch footer {
   color: #fff;
 }
 
+/* Background, border, and hover live on the Tailwind utilities in
+   components/hero.tsx; this class only holds the shared accent color. */
 .hero-action-pill {
-  background-color: #ffffff1a;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--text-primary, #f5f5f7);
 }
 
 /* ============================================================
