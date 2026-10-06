@@ -1,11 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, Grid3x3, Server } from "lucide-react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import Image from "next/image"
+import Link from "next/link"
+import { ArrowLeft, Server } from "lucide-react"
 import type { Season } from "@/lib/tmdb/types"
 import { getEmbedSources, type EmbedSource } from "@/lib/tmdb/embeds"
-import { addHistory, clearProgressPurge, getProgress, isProgressPurged, updateProgress } from "@/lib/watch-store"
+import { addHistory, clearProgressPurge, getAllProgress, getProgress, isProgressPurged, updateProgress } from "@/lib/watch-store"
 import { orderSources, clearServerPref, readServerPref, writeServerPref } from "@/lib/server-prefs"
+import { getEpisodeIntro } from "@/lib/episode-timing"
 import { readPrefs } from "@/lib/prefs"
 import { cx } from "@/lib/utils"
 
@@ -16,6 +19,27 @@ interface EpisodeBrief {
   still_path: string | null
   runtime: number | null
 }
+
+const MOBILE_MQ = "(max-width: 1023px)"
+
+function subscribeMobile(cb: () => void) {
+  const mq = window.matchMedia(MOBILE_MQ)
+  mq.addEventListener("change", cb)
+  return () => mq.removeEventListener("change", cb)
+}
+
+const isMobile = () => window.matchMedia(MOBILE_MQ).matches
+
+// `source` is built from localStorage/server prefs in a useState initializer, so
+// it only exists on the client. The iframe must not render during hydration
+// (server HTML has no iframe). This store renders `false` on the server and
+// during hydration, then flips to `true` after mount without setState-in-effect.
+function subscribeHydrated(cb: () => void) {
+  const t = setTimeout(cb, 0)
+  return () => clearTimeout(t)
+}
+
+const isHydrated = () => true
 
 export function WatchPlayer({
   id,
@@ -45,13 +69,42 @@ export function WatchPlayer({
   backHref: string
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const topBarRef = useRef<HTMLDivElement>(null)
   const durationRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTickRef = useRef({ sec: -1, dur: -1 })
   const lastHistorySecRef = useRef(-1)
   const loadedSrcRef = useRef<string | null>(null)
+  const autoSkipRef = useRef(false)
+  const autoNextFiredRef = useRef(false)
+  const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.random().toString(36).slice(2)}` : undefined))
+  // On mobile the top bar occupies real layout space above the video rather than
+// floating over it, so the frame is offset by the measured bar height instead of
+// sitting edge to edge.
+const mobile = useSyncExternalStore(subscribeMobile, isMobile, () => false)
+const hydrated = useSyncExternalStore(subscribeHydrated, isHydrated, () => false)
+const [topBarH, setTopBarH] = useState(0)
+
+useEffect(() => {
+  if (!mobile) return
+  const el = topBarRef.current
+  if (!el) return
+  const measure = () => setTopBarH(Math.round(el.getBoundingClientRect().height))
+  const raf = requestAnimationFrame(measure)
+  const ro = new ResizeObserver(measure)
+  ro.observe(el)
+  window.addEventListener("orientationchange", measure)
+  return () => {
+    cancelAnimationFrame(raf)
+    ro.disconnect()
+    window.removeEventListener("orientationchange", measure)
+  }
+}, [mobile])
+
+const topBarOffset = mobile ? topBarH : 0
+
+const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.random().toString(36).slice(2)}` : undefined))
 
   const [startAt, setStartAt] = useState(() => (isProgressPurged(id, kind) ? 0 : getProgress(id, kind, season, episodeNumber)?.currentTime ?? 0))
 
@@ -127,6 +180,7 @@ export function WatchPlayer({
   useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
     },
     [],
   )
@@ -170,40 +224,8 @@ export function WatchPlayer({
   useEffect(() => {
     durationRef.current = 0
     lastHistorySecRef.current = -1
+    autoSkipRef.current = false
   }, [source])
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return
-      const data = event.data
-      if (!data || typeof data !== "object") return
-
-      if (typeof data.type === "string" && data.type.startsWith("cinesrc:")) {
-        if (data.type === "cinesrc:loadedmetadata") {
-          durationRef.current = data.duration || 0
-          return
-        }
-        if (data.type === "cinesrc:timeupdate") {
-          recordProgress(data.currentTime || 0, data.duration || durationRef.current || 0)
-        }
-        return
-      }
-
-      if (data.type === "PLAYER_EVENT" && data.data && typeof data.data === "object") {
-        const m = data.data
-        if (m.event === "timeupdate" || m.event === "playerstatus") {
-          recordProgress(m.currentTime || 0, m.duration || durationRef.current || 0)
-        }
-        return
-      }
-
-      if (data.type === "player.event" && data.event && data.event.name === "position") {
-        recordProgress(data.event.position || 0, data.event.duration || 0)
-      }
-    }
-    window.addEventListener("message", onMessage)
-    return () => window.removeEventListener("message", onMessage)
-  }, [recordProgress])
 
   const loadSource = (s: EmbedSource) => {
     setSource(s)
@@ -271,28 +293,120 @@ export function WatchPlayer({
   )
 
   useEffect(() => {
-    if (episodesOpen && kind === "tv" && !episodeData[currentSeason]) {
+    if (kind === "tv" && !episodeData[currentSeason]) {
       const timer = setTimeout(() => fetchEpisodes(currentSeason), 0)
       return () => clearTimeout(timer)
     }
-  }, [episodesOpen, kind, currentSeason, episodeData, fetchEpisodes])
+  }, [kind, currentSeason, episodeData, fetchEpisodes])
 
   const currentSeasonEpisodes = episodeData[currentSeason] ?? null
 
-  const selectEpisode = (seas: number, ep: number) => {
-    const resumeFrom = getProgress(id, kind, seas, ep)?.currentTime ?? 0
-    setStartAt(resumeFrom)
-    const options = getEmbedSources({ type: kind, tmdbId: id, season: seas, episode: ep, startAt: resumeFrom, bust })
-    const next = options.find((s) => s.id === source?.id) ?? options[0] ?? null
-    if (seas !== currentSeason) {
-      setCurrentSeason(seas)
-      setSeasonMenuOpen(false)
+  const watchedEpBySeason = (() => {
+    if (!readPrefs().spoilerShield) return null
+    const all = getAllProgress()
+    const map: Record<number, number> = {}
+    for (const [key, p] of Object.entries(all)) {
+      if (!key.startsWith(`tv:${id}:`)) continue
+      const seas = p.season ?? 0
+      const ep = p.episode ?? 0
+      if (ep > (map[seas] ?? 0)) map[seas] = ep
     }
-    setPlayedSeason(seas)
-    setCurrentEpisode(ep)
-    setLoading(true)
-    setSource(next)
-  }
+    return map
+  })()
+
+  const selectEpisode = useCallback(
+    (seas: number, ep: number) => {
+      const resumeFrom = getProgress(id, kind, seas, ep)?.currentTime ?? 0
+      setStartAt(resumeFrom)
+      autoNextFiredRef.current = false
+      autoSkipRef.current = false
+      if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
+      const options = getEmbedSources({ type: kind, tmdbId: id, season: seas, episode: ep, startAt: resumeFrom, bust })
+      const next = options.find((s) => s.id === source?.id) ?? options[0] ?? null
+      if (seas !== currentSeason) {
+        setCurrentSeason(seas)
+        setSeasonMenuOpen(false)
+      }
+      setPlayedSeason(seas)
+      setCurrentEpisode(ep)
+      setEpisodesOpen(false)
+      setLoading(true)
+      setSource(next)
+    },
+    [id, kind, source, bust, currentSeason],
+  )
+
+  const seekTo = useCallback(
+    (time: number) => {
+      const win = frameRef.current?.contentWindow
+      if (!win || !source) return
+      try {
+        if (source.id === "vidlove") win.postMessage({ type: "SET_TIME", time }, "*")
+        else if (source.id === "xpass")
+          win.postMessage({ type: "player.action", action: "playAt", position: time }, "https://play.xpass.top")
+      } catch {
+        /* ignore */
+      }
+    },
+    [source],
+  )
+
+  const handleTick = useCallback(
+    (time: number, duration: number) => {
+      recordProgress(time, duration)
+      if (kind !== "tv") return
+      const prefs = readPrefs()
+      const dur = duration || durationRef.current || 0
+      if (prefs.autoSkipIntros && !autoSkipRef.current && dur > 0 && time > 2) {
+        const seg = getEpisodeIntro(id, playedSeason, currentEpisode)
+        if (seg && time >= seg.start && time < seg.end) {
+          autoSkipRef.current = true
+          seekTo(seg.end)
+        }
+      }
+      if (prefs.autoPlayNext && dur > 0 && time / dur >= 0.9 && !autoNextFiredRef.current) {
+        const eps = episodeData[currentSeason]
+        const nextEp = eps?.find((e) => e.episode_number === currentEpisode + 1)
+        if (!nextEp) return
+        autoNextFiredRef.current = true
+        autoNextTimerRef.current = setTimeout(() => selectEpisode(currentSeason, currentEpisode + 1), 900)
+      }
+    },
+    [recordProgress, kind, id, playedSeason, currentEpisode, episodeData, currentSeason, selectEpisode, seekTo],
+  )
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return
+      const data = event.data
+      if (!data || typeof data !== "object") return
+
+      if (typeof data.type === "string" && data.type.startsWith("cinesrc:")) {
+        if (data.type === "cinesrc:loadedmetadata") {
+          durationRef.current = data.duration || 0
+          return
+        }
+        if (data.type === "cinesrc:timeupdate") {
+          handleTick(data.currentTime || 0, data.duration || durationRef.current || 0)
+        }
+        return
+      }
+
+      if (data.type === "PLAYER_EVENT" && data.data && typeof data.data === "object") {
+        const m = data.data
+        if (m.event === "timeupdate" || m.event === "playerstatus") {
+          handleTick(m.currentTime || 0, m.duration || durationRef.current || 0)
+        }
+        return
+      }
+
+      if (data.type === "player.event" && data.event && data.event.name === "position") {
+        handleTick(data.event.position || 0, data.event.duration || 0)
+      }
+    }
+    window.addEventListener("message", onMessage)
+    return () => window.removeEventListener("message", onMessage)
+  }, [handleTick])
 
   const changeSeason = (seas: number) => {
     if (seas === currentSeason) {
@@ -304,33 +418,81 @@ export function WatchPlayer({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black overflow-hidden select-none">
-      {source && (
-        <iframe
-          ref={frameRef}
-          src={source.url}
-          onLoad={onFrameLoad}
-          className="absolute inset-0 w-full h-full"
-          allow="autoplay; fullscreen; picture-in-picture"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allowFullScreen
-          title={title}
-        />
-      )}
-      {loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black">
-          <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-        </div>
-      )}
+    <div className={cx("fixed inset-0 z-[60] bg-black overflow-hidden select-none", mobile && "flex flex-col")}>
+      {source && hydrated &&
+        (mobile ? (
+          kind === "movie" ? (
+            <div className="relative w-full flex-1 min-h-0 bg-black">
+              <iframe
+                ref={frameRef}
+                src={source.url}
+                onLoad={onFrameLoad}
+                className="absolute inset-0 w-full h-full"
+                allow="autoplay; fullscreen; picture-in-picture"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                title={title}
+              />
+              {loading && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="relative w-full aspect-video bg-black shrink-0">
+              <iframe
+                ref={frameRef}
+                src={source.url}
+                onLoad={onFrameLoad}
+                className="absolute inset-0 w-full h-full"
+                allow="autoplay; fullscreen; picture-in-picture"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                title={title}
+              />
+              {loading && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black">
+                  <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          <>
+            <iframe
+              ref={frameRef}
+              src={source.url}
+              onLoad={onFrameLoad}
+              className="absolute inset-x-0 w-full"
+              style={{
+                top: topBarOffset,
+                height: `calc(100% - ${topBarOffset}px)`,
+              }}
+              allow="autoplay; fullscreen; picture-in-picture"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+              title={title}
+            />
+            {loading && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black">
+                <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+              </div>
+            )}
+          </>
+        ))}
 
       {/* top bar */}
-      <div className="absolute inset-x-0 top-0 z-30">
-        <div className="bg-gradient-to-b from-black/85 via-black/45 to-transparent pt-3 lg:pt-4 px-4 lg:px-6 pb-10">
+      <div ref={topBarRef} className={cx("inset-x-0 top-0 z-30", mobile ? "relative order-first" : "absolute")}>
+        <div className="bg-gradient-to-b from-black/85 via-black/45 to-transparent pt-3 lg:pt-4 px-4 lg:px-6 pb-3 lg:pb-10">
           <div className="flex items-center gap-3">
-        <a href={backHref} aria-label="Back to details" className="flex items-center gap-2 text-white/80 hover:text-white transition-colors">
+        {/* Client-side navigation rather than a full document load: this
+            unmounts a player with a live iframe, and a hard navigation would
+            tear that down before the router could preserve state. */}
+        <Link href={backHref} aria-label="Back to details" className="flex items-center gap-2 text-white/80 hover:text-white transition-colors">
           <ArrowLeft className="w-6 h-6" />
           <span className="hidden sm:inline text-sm font-medium truncate max-w-[180px] lg:max-w-[420px]">{title}</span>
-        </a>
+        </Link>
         {kind === "tv" && (
           <span
             title={episodeName ?? undefined}
@@ -350,7 +512,7 @@ export function WatchPlayer({
               className="flex items-center gap-2 h-9 px-3.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold transition-colors cursor-pointer"
             >
               <Server className="w-3.5 h-3.5 text-white/70" />
-              <span>{source?.label ?? "Source"}</span>
+              <span>{hydrated ? (source?.label ?? "Source") : "Source"}</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -359,7 +521,7 @@ export function WatchPlayer({
               <div
                 role="menu"
                 aria-label="Streaming sources"
-                className="absolute right-0 top-full mt-2 w-44 bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in"
+                className="absolute right-0 top-full mt-2 w-44 surface-nav-drop rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in"
               >
                 {buildSources(currentSeason, currentEpisode).map((s) => (
                   <button
@@ -377,7 +539,7 @@ export function WatchPlayer({
               </div>
             )}
           </div>
-          {kind === "tv" && (
+          {kind === "tv" && !mobile && (
             <button
               onClick={() => setEpisodesOpen((v) => !v)}
               aria-expanded={episodesOpen}
@@ -386,7 +548,23 @@ export function WatchPlayer({
                 episodesOpen ? "bg-white text-black border-white" : "bg-white/10 hover:bg-white/20 border-white/10 text-white",
               )}
             >
-              <Grid3x3 className="w-3.5 h-3.5" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-3.5 h-3.5"
+                aria-hidden
+              >
+                <path d="M7 2h10" />
+                <path d="M5 6h14" />
+                <rect width="18" height="12" x="3" y="10" rx="2" />
+              </svg>
               <span className="hidden sm:inline">Episodes</span>
             </button>
           )}
@@ -395,21 +573,30 @@ export function WatchPlayer({
       </div>
       </div>
 
-      {/* episodes panel */}
-      {kind === "tv" && episodesOpen && (
-        <div className="absolute right-0 top-0 bottom-0 z-[65] w-full max-w-[420px] bg-[#0c0c0e]/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-            <h3 className="text-sm font-semibold text-white/90">Episodes</h3>
+      {/* episodes panel: right drawer on desktop, always-open section below the 16:9 video on mobile */}
+      {kind === "tv" && (episodesOpen || mobile) && (
+        <div
+          className={cx(
+            "z-[65] bg-[var(--surface)] border-[var(--border)] flex flex-col",
+            mobile
+              ? "relative w-full flex-1 min-h-0 border-t"
+              : "absolute right-0 top-0 bottom-0 w-full max-w-[420px] border-l shadow-2xl",
+          )}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Episodes</h3>
+            {!mobile && (
             <button
               onClick={() => setEpisodesOpen(false)}
               aria-label="Close episodes"
-              className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+              className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-[var(--surface-hover)] text-white/70 hover:text-white transition-colors cursor-pointer"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
+            )}
           </div>
 
           <div className="relative px-4 pt-3">
@@ -417,7 +604,7 @@ export function WatchPlayer({
               onClick={() => setSeasonMenuOpen((v) => !v)}
               aria-haspopup="menu"
               aria-expanded={seasonMenuOpen}
-              className="flex items-center gap-2 h-9 px-3.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-2 h-9 px-3.5 rounded-full bg-[var(--surface-elevated)] hover:bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-semibold transition-colors cursor-pointer"
             >
               {seasonList().find((s) => s.season_number === currentSeason)?.name || `Season ${currentSeason}`}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
@@ -425,14 +612,16 @@ export function WatchPlayer({
               </svg>
             </button>
             {seasonMenuOpen && (
-              <div className="absolute top-full mt-2 left-4 right-4 bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in">
+              <div className="absolute top-full mt-2 left-4 right-4 surface-nav-drop rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in">
                 {seasonList().map((s) => (
                   <button
                     key={s.season_number}
                     onClick={() => changeSeason(s.season_number)}
                     className={cx(
                       "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center justify-between",
-                      s.season_number === currentSeason ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white",
+                      s.season_number === currentSeason
+                        ? "bg-[var(--surface-hover)] text-[var(--text-primary)]"
+                        : "text-white/70 hover:bg-[var(--surface-hover)] hover:text-white",
                     )}
                   >
                     <span>{s.name || `Season ${s.season_number}`}</span>
@@ -447,7 +636,7 @@ export function WatchPlayer({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2 glass-scrollbar mt-2">
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 app-scrollbar mt-2">
             {currentSeasonEpisodes === null ? (
               <div className="flex justify-center py-10">
                 <div className="w-7 h-7 rounded-full border-2 border-white/20 border-t-white animate-spin" />
@@ -457,6 +646,12 @@ export function WatchPlayer({
             ) : (
               currentSeasonEpisodes.map((ep) => {
                 const activeNow = playedSeason === currentSeason && ep.episode_number === currentEpisode
+                const watchedUpTo = Math.max(
+                  watchedEpBySeason?.[currentSeason] ?? 0,
+                  playedSeason === currentSeason ? currentEpisode : 0,
+                )
+                const shielded =
+                  watchedEpBySeason !== null && ep.episode_number > watchedUpTo
                 return (
                   <button
                     key={ep.episode_number}
@@ -464,26 +659,40 @@ export function WatchPlayer({
                     className={cx(
                       "w-full flex gap-3 p-2 rounded-xl border text-left transition-colors cursor-pointer",
                       activeNow
-                        ? "bg-white/10 border-white/25"
-                        : "bg-white/[0.04] border-white/[0.06] hover:bg-white/[0.09] hover:border-white/20",
+                        ? "bg-[var(--surface-hover)] border-[var(--accent)]"
+                        : "bg-[var(--surface)] border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] hover:border-[var(--border)]",
                     )}
                   >
-                    <div className="relative flex-none w-24 aspect-video rounded-lg overflow-hidden bg-white/5">
+                    <div className="relative flex-none w-24 aspect-video rounded-lg overflow-hidden bg-[var(--surface-input)]">
                       {ep.still_path ? (
-                        <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt={ep.name || `Episode ${ep.episode_number}`} loading="lazy" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="w-full h-full flex items-center justify-center text-[10px] font-bold text-white/40">
-                          E{String(ep.episode_number).padStart(2, "0")}
+                        <Image
+                          fill
+                          sizes="96px"
+                          src={`https://image.tmdb.org/t/p/w300${ep.still_path}`}
+                          alt=""
+                          aria-hidden={shielded || undefined}
+                          className={cx("object-cover", shielded && "blur-[6px]")}
+                        />
+                      ) : null}
+                      {ep.runtime && !shielded && (
+                        <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded bg-black/75 border border-white/10 text-[9px] font-medium text-white leading-none">
+                          {ep.runtime}m
+                        </span>
+                      )}
+                      {(!ep.still_path || shielded) && (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-white/40">
+                            E{String(ep.episode_number).padStart(2, "0")}
+                          </span>
                         </span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-white/50 tabular-nums">E{String(ep.episode_number).padStart(2, "0")}</span>
-                        <p className="text-xs font-medium text-white/90 truncate">{ep.name || `Episode ${ep.episode_number}`}</p>
+                        <p className="text-xs font-medium text-[var(--text-primary)] truncate">{ep.name || `Episode ${ep.episode_number}`}</p>
                       </div>
-                      {ep.runtime ? <span className="text-[10px] text-white/35">{ep.runtime}m</span> : null}
-                      {ep.overview ? <p className="text-[11px] text-white/45 line-clamp-2 mt-0.5">{ep.overview}</p> : null}
+                      {ep.overview && !shielded ? <p className="text-[11px] text-white/45 line-clamp-2 mt-0.5">{ep.overview}</p> : null}
                     </div>
                   </button>
                 )

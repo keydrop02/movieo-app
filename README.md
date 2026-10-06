@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Movieo
 
-## Getting Started
+A movie and TV discovery front end. Catalogue data and artwork come from
+[TMDB](https://www.themoviedb.org/); playback and download links are handed off
+to third-party embed providers. The app hosts no media files.
 
-First, run the development server:
+## Requirements
+
+- Node.js 22
+- A TMDB API key. Multiple keys are supported: provide them comma-separated to
+  rotate across the rate limit.
+
+## Environment
+
+Create `.env.local`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+TMDB_API_KEYS=your_key_here
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Optional, all with safe defaults:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SITE_URL` | Canonical origin for `metadataBase`, Open Graph, sitemap, and robots | `https://movieo.app` |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Contact address on the legal pages | `contact@example.com` |
+| `NEXT_PUBLIC_SENTRY_DSN` | Enables client-side error reporting | unset (console only) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Commands
 
-## Learn More
+```bash
+npm run dev            # Next.js dev server
+npm run build          # next build
+npm start              # next start
 
-To learn more about Next.js, take a look at the following resources:
+npm run dev:vinext     # vinext dev (Workers runtime), port 3001
+npm run build:vinext   # vinext build
+npm run start:vinext   # wrangler dev against the built output
+npm run deploy:vinext  # deploy to Cloudflare Workers
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Deployment targets Cloudflare Workers via [`vinext`](https://github.com/lakehq/vinext)
+and is driven by `.github/workflows/deploy.yml`, which runs typecheck, lint, and
+build before deploying. `wrangler.jsonc` declares a `RATE_LIMITER` binding used
+by `lib/rate-limit.ts`; without it the limiter falls back to a bounded
+per-isolate map.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Structure
 
-## Deploy on Vercel
+```
+app/                  routes; app/api/* are the server endpoints
+components/           UI, all client components where interactive
+lib/tmdb/client.ts    the only module that talks to the TMDB API
+lib/tmdb/safe.ts      failure-tolerant wrappers used during prerender
+lib/use-dialog.ts    shared modal behaviour (focus trap, scroll lock, Escape)
+lib/rate-limit.ts    Cloudflare rate limiting with an in-memory fallback
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Notes for contributors
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Every TMDB read on a prerendered page goes through `safeLoad` from
+  `lib/tmdb/safe.ts`. A third-party network blip must not fail the build.
+- New overlays should use `useDialog` from `lib/use-dialog.ts` rather than
+  hand-rolling keydown and body-scroll handling.
+- Client-side data fetches check `res.ok` and distinguish a failed request from
+  an empty result. Call `reportError` from `lib/error-reporting.ts` on failure.
+- The dark solid palette is deliberate. Do not reintroduce glass effects or
+  `backdrop-filter`.

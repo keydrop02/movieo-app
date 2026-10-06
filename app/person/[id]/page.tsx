@@ -1,3 +1,5 @@
+import type { Metadata } from "next"
+import Image from "next/image"
 import { notFound } from "next/navigation"
 import { BackButton } from "@/components/back-button"
 import { Filmography } from "@/components/filmography"
@@ -21,9 +23,22 @@ function formatDate(d: string | null): string {
   return new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
 }
 
-export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
+type Params = { params: Promise<{ id: string }> }
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params
-  const person = await getPerson(Number(id))
+  const person = await getPerson(Number(id)).catch(() => null)
+  if (!person) return { title: "Not found" }
+  return {
+    title: person.name,
+    description: person.biography?.slice(0, 200) || `${person.name} filmography on Movieo.`,
+    alternates: { canonical: `/person/${id}` },
+  }
+}
+
+export default async function PersonPage({ params }: Params) {
+  const { id } = await params
+  const person = await getPerson(Number(id)).catch(() => null)
   if (!person) notFound()
 
   const birthday = formatDate(person.birthday)
@@ -43,9 +58,15 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
           </div>
           <div className="flex flex-col sm:flex-row gap-8 lg:gap-14">
             <div className="flex-none mx-auto sm:mx-0">
-              <div className="w-40 h-56 lg:w-56 lg:h-72 rounded-2xl overflow-hidden bg-white/5 border border-white/10 shadow-xl shadow-black/40">
+              <div className="relative w-40 h-56 lg:w-56 lg:h-72 rounded-2xl overflow-hidden bg-white/5 border border-white/10 shadow-xl shadow-black/40">
                 {person.profile_path ? (
-                  <img className="w-full h-full object-cover" src={img(person.profile_path, "w500") ?? undefined} alt={person.name} />
+                  <Image
+                    fill
+                    sizes="(max-width: 1024px) 160px, 224px"
+                    className="object-cover"
+                    src={img(person.profile_path, "w500") ?? ""}
+                    alt={person.name}
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-5xl font-bold text-white/30">
                     {person.name.slice(0, 1)}

@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
+import Image from "next/image"
 import { Check, Plus, X } from "lucide-react"
 import type { MediaItem } from "@/lib/tmdb/types"
 import { addToList, createList, isInAnyList, isInList, readLists, subscribe, toggleInList, type StoredList } from "@/lib/lists"
 import { img } from "@/lib/tmdb/images"
 import { cx } from "@/lib/utils"
+import { useDialog } from "@/lib/use-dialog"
 
 export function AddToListPopover({
   label = "Add to list",
@@ -25,9 +27,45 @@ export function AddToListPopover({
   const panelRef = useRef<HTMLDivElement>(null)
   const mobilePanelRef = useRef<HTMLDivElement>(null)
 
+  const close = useCallback(() => setOpen(false), [])
+
+  // Above `sm` this is an inline dropdown, not a modal, so it must not trap
+  // focus or lock scrolling. Below `sm` it is a centred sheet in a portal and
+  // should behave exactly like every other dialog in the app.
+  const [isSheet, setIsSheet] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)")
+    const sync = () => setIsSheet(mq.matches)
+    sync()
+    mq.addEventListener("change", sync)
+    return () => mq.removeEventListener("change", sync)
+  }, [])
+
+  const sheetRef = useDialog<HTMLDivElement>(open && isSheet, close)
+  const setMobilePanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      sheetRef.current = node
+      mobilePanelRef.current = node
+    },
+    [sheetRef],
+  )
+
   useEffect(() => {
     return subscribe(() => setLists(readLists()))
   }, [])
+
+  // Escape closes the desktop dropdown too. `useDialog` only covers the mobile
+  // sheet, and a dismissible popover that traps Escape is a keyboard trap.
+  useEffect(() => {
+    if (!open || isSheet) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open, isSheet, close])
 
   useEffect(() => {
     if (!open) return
@@ -40,14 +78,9 @@ export function AddToListPopover({
       )
         setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
     document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
     return () => {
       document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
     }
   }, [open])
 
@@ -59,7 +92,15 @@ export function AddToListPopover({
     setCreating(false)
   }
 
-  const inAny = !!item && isInAnyList(item)
+  // `isInAnyList` reads localStorage, which differs between the server (empty)
+  // and a returning client, so it must not be read during a synchronous render.
+  // `useSyncExternalStore` keeps hydration clean (server snapshot is `false`)
+  // and flips the icon to Check once the client store is read after mount.
+  const inAny = useSyncExternalStore(
+    subscribe,
+    () => !!item && isInAnyList(item),
+    () => false,
+  )
 
   return (
     <div ref={wrapRef} className="relative flex h-full w-full">
@@ -85,7 +126,7 @@ export function AddToListPopover({
           <div
             ref={panelRef}
             className="hidden sm:absolute sm:block sm:top-full sm:mt-2 sm:w-72 sm:max-w-none z-[100] sm:left-0 sm:right-auto
-                       bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10
+                       surface-modal
                        rounded-xl shadow-2xl
                        flex flex-col sm:max-h-[min(60vh,440px)] overflow-hidden"
           >
@@ -102,11 +143,15 @@ export function AddToListPopover({
           {typeof document !== "undefined" &&
             createPortal(
               <div className="fixed inset-0 z-[101] sm:hidden">
-                <div role="presentation" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
+                <div role="presentation" className="absolute inset-0 bg-black/70" onClick={() => setOpen(false)} />
                 <div className="absolute inset-0 flex items-center justify-center p-4">
                   <div
-                    ref={mobilePanelRef}
-                    className="w-full max-w-sm bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10
+                    ref={setMobilePanelRef}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Add to list"
+                    tabIndex={-1}
+                    className="w-full max-w-sm surface-modal
                                rounded-xl shadow-2xl
                                flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden"
                   >
@@ -165,6 +210,7 @@ function Content({
         ) : (
           lists.map((l) => {
             const added = item ? isInList(l.id, item) : false
+            const preview = l.items[l.items.length - 1]
             return (
               <button
                 key={l.id}
@@ -175,8 +221,14 @@ function Content({
                   added ? "text-white" : "text-white/80"
                 }`}
               >
-                {l.items[0]?.poster_path ? (
-                  <img src={img(l.items[0].poster_path, "w92") ?? undefined} alt="" className="w-8 h-8 rounded-md object-cover bg-white/[0.06] shrink-0" />
+                {preview?.poster_path ? (
+                  <Image
+                    width={32}
+                    height={32}
+                    src={img(preview.poster_path, "w92") ?? ""}
+                    alt=""
+                    className="w-8 h-8 rounded-md object-cover bg-white/[0.06] shrink-0"
+                  />
                 ) : (
                   <span className="w-8 h-8 rounded-md bg-white/[0.06] border border-white/10 flex items-center justify-center shrink-0">
                     <Plus className="w-3.5 h-3.5 text-white/30" />

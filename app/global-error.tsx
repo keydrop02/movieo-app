@@ -23,8 +23,8 @@ export default function GlobalError({
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#0f0f0f",
-          color: "#fff",
+          backgroundColor: "#0b0b0d",
+          color: "var(--text-primary)",
           fontFamily: "system-ui, sans-serif",
           padding: "0 24px",
         }}
@@ -55,9 +55,9 @@ export default function GlobalError({
               height: 40,
               padding: "0 20px",
               borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.1)",
-              color: "#fff",
+              border: "1px solid var(--border)",
+              background: "var(--surface-hover)",
+              color: "var(--text-primary)",
               fontSize: 14,
               fontWeight: 600,
               cursor: "pointer",
@@ -65,6 +65,12 @@ export default function GlobalError({
           >
             Try again
           </button>
+          {/* A plain anchor, deliberately: `global-error` replaces the entire
+              document including the router context, so `next/link` would have no
+              router to push onto. A full document navigation is the correct
+              fallback here. The ESLint rule cannot tell the two cases apart, so
+              it is disabled for this line. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a
             href="/"
             style={{
@@ -73,9 +79,9 @@ export default function GlobalError({
               height: 40,
               padding: "0 20px",
               borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.1)",
-              color: "#fff",
+              border: "1px solid var(--border)",
+              background: "var(--surface-hover)",
+              color: "var(--text-primary)",
               fontSize: 14,
               fontWeight: 600,
               textDecoration: "none",

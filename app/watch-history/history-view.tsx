@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { AlertTriangle, Clock, X } from "lucide-react"
 import {
@@ -14,6 +14,7 @@ import {
   type HistoryEntry,
 } from "@/lib/watch-store"
 import { cx } from "@/lib/utils"
+import { useDialog } from "@/lib/use-dialog"
 import { WatchHistoryCard } from "@/components/watch-history-card"
 
 export function HistoryView() {
@@ -22,6 +23,8 @@ const [filter, setFilter] = useState<"all" | "movie" | "tv">("all")
   const [entries, setEntries] = useState<HistoryEntry[]>(() => getHistory())
   const [confirming, setConfirming] = useState(false)
   const confirmRef = useRef<HTMLDivElement>(null)
+  const closeConfirm = useCallback(() => setConfirming(false), [])
+  const dialogRef = useDialog<HTMLDivElement>(confirming, closeConfirm)
   const rows = useMemo(
     () => (filter === "all" ? entries : entries.filter((e) => e.type === filter)),
     [entries, filter],
@@ -48,14 +51,9 @@ const [filter, setFilter] = useState<"all" | "movie" | "tv">("all")
     const onClick = (e: MouseEvent) => {
       if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) setConfirming(false)
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirming(false)
-    }
     document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
     return () => {
       document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
     }
   }, [confirming])
 
@@ -110,7 +108,7 @@ const [filter, setFilter] = useState<"all" | "movie" | "tv">("all")
       </div>
 
       {rows.length === 0 ? (
-        <div className="glass-panel mt-10 px-8 py-14 text-center">
+        <div className="surface-panel mt-10 px-8 py-14 text-center">
           <Clock className="w-8 h-8 text-white/30 mx-auto" />
           <p className="text-white/45 text-sm mt-4">
             {entries.length === 0
@@ -133,13 +131,13 @@ const [filter, setFilter] = useState<"all" | "movie" | "tv">("all")
       {confirming &&
         createPortal(
           <div className="fixed inset-0 z-[160]">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/70" />
             <div
-              ref={confirmRef}
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-label="Clear watch history"
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm surface-dropdown rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
             >
               <div className="flex items-start justify-between gap-3 px-5 pt-5">
                 <div className="flex items-center gap-2.5">

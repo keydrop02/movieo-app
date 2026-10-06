@@ -7,20 +7,38 @@ export type StoredList = {
   createdAt: number
 }
 
-const KEY = "cineflick.lists"
+/** Legacy key written by the CineFlick predecessor app. Read for migration only. */
+const LEGACY_KEY = "cineflick.lists"
+const KEY = "movieo:lists"
 const listeners = new Set<() => void>()
 
 export function itemKey(item: { id: number; kind: string }): string {
   return `${item.kind}:${item.id}`
 }
 
+function parseLists(raw: string | null): StoredList[] {
+  if (!raw) return []
+  const parsed: unknown = JSON.parse(raw)
+  if (!Array.isArray(parsed)) return []
+  return parsed.filter((l): l is StoredList => !!l && typeof l === "object" && typeof (l as StoredList).id === "string")
+}
+
 export function readLists(): StoredList[] {
   try {
-    const raw = window.localStorage.getItem(KEY)
-    if (!raw) return []
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((l): l is StoredList => !!l && typeof l === "object" && typeof (l as StoredList).id === "string")
+    const current = window.localStorage.getItem(KEY)
+    if (current !== null) return parseLists(current)
+
+    // First read after migrating off the old key: carry the saved lists over so
+    // nobody silently loses their watchlists on upgrade.
+    const legacy = window.localStorage.getItem(LEGACY_KEY)
+    if (legacy === null) return []
+
+    const migrated = parseLists(legacy)
+    if (migrated.length > 0) {
+      window.localStorage.setItem(KEY, JSON.stringify(migrated))
+      window.localStorage.removeItem(LEGACY_KEY)
+    }
+    return migrated
   } catch {
     return []
   }
@@ -103,16 +121,20 @@ export function isInAnyList(item: MediaItem): boolean {
 }
 
 export type ListFile = {
-  app: "cineflick"
+  /** Exported under the current app name. */
+  app: "movieo"
   type: "lists"
   version: 1
   exportedAt: string
   lists: StoredList[]
 }
 
+/** Accepted `app` values on import, so older exports still open. */
+const ACCEPTED_APPS = new Set(["movieo", "cineflick"])
+
 export function serializeListFile(lists: StoredList[]): string {
   const file: ListFile = {
-    app: "cineflick",
+    app: "movieo",
     type: "lists",
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -126,7 +148,8 @@ export function parseListImport(text: string): StoredList[] | null {
     const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== "object") return null
     const f = parsed as Partial<ListFile>
-    if (f.app !== "cineflick" || f.type !== "lists" || f.version !== 1 || !Array.isArray(f.lists)) return null
+    if (typeof f.app !== "string" || !ACCEPTED_APPS.has(f.app)) return null
+    if (f.type !== "lists" || f.version !== 1 || !Array.isArray(f.lists)) return null
     if (
       !f.lists.every(
         (l) =>

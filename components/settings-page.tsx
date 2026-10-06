@@ -1,45 +1,37 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   AlertTriangle,
   Archive,
-  ChevronDown,
   Download,
   GripVertical,
   History,
   Monitor,
   PlayCircle,
   RotateCcw,
+  Search,
+  ShieldCheck,
   Star,
   Upload,
   X,
 } from "lucide-react"
 import { cx } from "@/lib/utils"
 import { site } from "@/lib/site"
-import { applyPrefs, DEFAULT_PREFS, PREFS_KEY, readPrefs, writePrefs, type Prefs } from "@/lib/prefs"
+import { applyPrefs, DEFAULT_PREFS, readPrefs, writePrefs, type Prefs } from "@/lib/prefs"
 import { clearAllPurges, clearHistory, clearProgress, getHistory, parseHistoryImport, setHistory } from "@/lib/watch-store"
 import { parseListImport, readLists, serializeListFile, writeLists, itemKey } from "@/lib/lists"
 import { getProviders } from "@/lib/tmdb/embeds"
 import { clearAllServerPrefs, clearServerOrder, readServerOrder, writeServerOrder } from "@/lib/server-prefs"
-
-const THEMES = [
-  { id: "default", name: "Default", color: "#ffffff" },
-  { id: "aero", name: "Aero", color: "#96dbfc" },
-  { id: "ember", name: "Ember", color: "#e05a2a" },
-  { id: "royal", name: "Royal", color: "#8b5cf6" },
-  { id: "noir", name: "Noir", color: "#c9822b" },
-  { id: "ocean", name: "Ocean", color: "#14b8a6" },
-  { id: "obsidian", name: "Obsidian", color: "#b8b8b8" },
-]
+import { clearRecentSearches } from "@/lib/search-history"
+import { clearEpisodeTimings } from "@/lib/episode-timing"
+import { useDialog } from "@/lib/use-dialog"
 
 const PROVIDERS = getProviders()
 const DEFAULT_ORDER = PROVIDERS.map((p) => p.id)
 
-type DropdownOption = { id: string; name: string; color?: string }
-
-type ConfirmTarget = "history" | "lists" | "reset" | null
+type ConfirmTarget = "history" | "lists" | "storage" | null
 
 function Section({ icon: Icon, title, desc, children }: { icon: React.ElementType; title: string; desc: string; children: React.ReactNode }) {
   return (
@@ -75,7 +67,7 @@ function Toggle({ on, onChange, label, desc }: { on: boolean; onChange: (v: bool
         onClick={() => onChange(!on)}
         className={cx(
           "relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer",
-          on ? "bg-[#2bd576]" : "bg-white/15",
+          on ? "bg-[#30d158]" : "bg-[#2c2c2f]",
         )}
       >
         <span
@@ -85,92 +77,6 @@ function Toggle({ on, onChange, label, desc }: { on: boolean; onChange: (v: bool
           )}
         />
       </button>
-    </div>
-  )
-}
-
-function MenuDropdown({
-  value,
-  options,
-  onChange,
-  ariaLabel,
-  hint,
-}: {
-  value: DropdownOption
-  options: DropdownOption[]
-  onChange: (o: DropdownOption) => void
-  ariaLabel: string
-  hint?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", onDown)
-    document.addEventListener("keydown", onKey)
-    return () => {
-      document.removeEventListener("mousedown", onDown)
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [open])
-
-  return (
-    <div className="w-full max-w-[260px]">
-      <div ref={ref} className="relative">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-label={ariaLabel}
-          className="w-full flex items-center justify-between gap-3 h-11 px-4 rounded-xl glass-dropdown theme-glass-drop border border-white/10 text-sm text-white/90 transition-colors cursor-pointer"
-        >
-          <span className="inline-flex items-center gap-2.5 min-w-0">
-            {value.color && (
-              <span className="w-5 h-5 rounded-full shrink-0 ring-1 ring-white/30" style={{ backgroundColor: value.color }} />
-            )}
-            <span className="font-medium truncate">{value.name}</span>
-          </span>
-          <ChevronDown
-            className={cx("w-4 h-4 text-white/50 transition-transform duration-200 shrink-0", open && "rotate-180")}
-          />
-        </button>
-        {open && (
-          <div
-            role="listbox"
-            aria-label={ariaLabel}
-            className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-xl glass-dropdown theme-glass-drop overflow-hidden flex flex-col py-1 animate-dropdown-in"
-          >
-            {options.map((o) => (
-              <button
-                key={o.id}
-                role="option"
-                aria-selected={o.id === value.id}
-                onClick={() => {
-                  onChange(o)
-                  setOpen(false)
-                }}
-                className={cx(
-                  "flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer w-full",
-                  o.id === value.id ? "text-white bg-white/15" : "text-white/80 hover:text-white hover:bg-white/10",
-                )}
-              >
-{o.color && (
-                  <span className="w-5 h-5 rounded-full shrink-0 ring-1 ring-white/30" style={{ backgroundColor: o.color }} />
-                )}
-                <span className="flex-1 truncate">{o.name}</span>
-                </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {hint && <p className="mt-2 text-[12px] text-white/40 leading-snug">{hint}</p>}
     </div>
   )
 }
@@ -186,6 +92,57 @@ export function SettingsPage() {
   const [historySuccess, setHistorySuccess] = useState<number | null>(null)
   const [listSuccess, setListSuccess] = useState<number | null>(null)
   const confirmRef = useRef<HTMLDivElement>(null)
+  const closeConfirm = useCallback(() => setConfirming(null), [])
+  const dialogRef = useDialog<HTMLDivElement>(confirming !== null, closeConfirm)
+
+  interface BeforeInstallPromptEvent extends Event {
+    prompt: () => Promise<void>
+    userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
+  }
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const onPrompt = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e as BeforeInstallPromptEvent)
+    }
+    const onInstalled = () => setInstalled(true)
+    window.addEventListener("beforeinstallprompt", onPrompt)
+    window.addEventListener("appinstalled", onInstalled)
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt)
+      window.removeEventListener("appinstalled", onInstalled)
+    }
+  }, [])
+
+  const requestInstall = async () => {
+    const evt = deferredPrompt
+    if (!evt) return
+    try {
+      await evt.prompt()
+      const choice = await evt.userChoice
+      if (choice.outcome === "accepted") setInstalled(true)
+      setDeferredPrompt(null)
+    } catch {}
+  }
+
+  /**
+   * Touch scrolling is suppressed while a provider row is being drag-reordered.
+   * Driven from state rather than written inline inside the pointer handlers:
+   * the React compiler treats a direct `document.body.style` assignment in an
+   * event handler as a forbidden mutation of a value it cannot track, and
+   * routing it through an effect is also the correct place for a side effect.
+   */
+  const [touchActionLocked, setTouchActionLocked] = useState(false)
+  useEffect(() => {
+    document.body.style.touchAction = touchActionLocked ? "none" : ""
+    return () => {
+      document.body.style.touchAction = ""
+    }
+  }, [touchActionLocked])
+
   const importRef = useRef<HTMLInputElement>(null)
   const historyImportRef = useRef<HTMLInputElement>(null)
   const dragStateRef = useRef<{
@@ -217,8 +174,6 @@ export function SettingsPage() {
     return () => clearTimeout(t)
   }, [listSuccess])
 
-  const currentTheme = THEMES.find((t) => t.id === prefs.themeId) ?? THEMES[0]
-
   const displayOrder = (() => {
     if (order.length === 0) return DEFAULT_ORDER
     const present = order.filter((id) => DEFAULT_ORDER.includes(id))
@@ -246,14 +201,9 @@ export function SettingsPage() {
     const onDown = (e: MouseEvent) => {
       if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) setConfirming(null)
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirming(null)
-    }
     document.addEventListener("mousedown", onDown)
-    document.addEventListener("keydown", onKey)
     return () => {
       document.removeEventListener("mousedown", onDown)
-      document.removeEventListener("keydown", onKey)
     }
   }, [confirming])
 
@@ -369,20 +319,13 @@ export function SettingsPage() {
       .catch(() => {})
   }
 
-  const resetAll = () => {
-    try {
-      window.localStorage.removeItem(PREFS_KEY)
-      window.localStorage.removeItem("movieo:history")
-      window.localStorage.removeItem("movieo:progress")
-      window.localStorage.removeItem("movieo:purged")
-      window.localStorage.removeItem("cineflick.lists")
-    } catch {}
+  const clearStorage = () => {
+    clearRecentSearches()
+    clearEpisodeTimings()
     clearServerOrder()
     clearAllServerPrefs()
     applyPrefs(DEFAULT_PREFS)
     setPrefs(DEFAULT_PREFS)
-    setHistoryCount(0)
-    setListCount(0)
     setOrder([])
     setConfirming(null)
   }
@@ -421,9 +364,7 @@ export function SettingsPage() {
       dragStateRef.current.active = true
       setDragId(id)
       setOverId(null)
-      try {
-        document.body.style.touchAction = "none"
-      } catch {}
+      setTouchActionLocked(true)
       try {
         el.setPointerCapture(pointerId)
       } catch {}
@@ -452,9 +393,7 @@ export function SettingsPage() {
     if (!drag || e.pointerId !== drag.pointerId) return
     clearHold()
     dragStateRef.current = null
-    try {
-      if (drag.active) document.body.style.touchAction = ""
-    } catch {}
+    if (drag.active) setTouchActionLocked(false)
     try {
       e.currentTarget.releasePointerCapture(e.pointerId)
     } catch {}
@@ -468,19 +407,19 @@ export function SettingsPage() {
   }
 
   const confirmTitle =
-    confirming === "reset"
-      ? "Reset everything?"
+    confirming === "storage"
+      ? "Clear storage?"
       : confirming === "lists"
         ? "Clear all lists?"
         : "Clear watch history?"
   const confirmBody =
-    confirming === "reset"
-      ? "This will remove your watch history, progress, lists, theme choices, and playback preferences, then restore the defaults. This can\u2019t be undone."
+    confirming === "storage"
+      ? "This will remove your recent searches, server order, server preference, and restore playback settings to defaults. Watch history and lists are kept."
       : confirming === "lists"
         ? "This will permanently remove all your lists and their items. This can\u2019t be undone."
         : "This will permanently remove all watched entries and their progress. This can\u2019t be undone."
-  const confirmAction = confirming === "reset" ? resetAll : confirming === "lists" ? clearAllLists : clearWatchHistory
-  const confirmLabel = confirming === "reset" ? "Reset all" : "Clear all"
+  const confirmAction = confirming === "storage" ? clearStorage : confirming === "lists" ? clearAllLists : clearWatchHistory
+  const confirmLabel = confirming === "storage" ? "Clear storage" : "Clear all"
 
   return (
     <div className="relative z-10 min-h-[60vh] pt-28 px-6 lg:px-16 pb-20 max-w-3xl mx-auto">
@@ -488,34 +427,41 @@ export function SettingsPage() {
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-white">Settings</h1>
           <p className="text-white/45 text-sm mt-2">
-            Customize the look of {site.name} and manage your local data. Changes save automatically on this device.
+            Customize {site.name} the way you like. Changes save automatically on this device.
           </p>
         </div>
       </header>
 
       <div className="mt-8 space-y-4">
-        <Section icon={Monitor} title="Appearance" desc="Theme, effects, and motion across the whole site.">
-          <MenuDropdown
-            value={currentTheme}
-            options={THEMES}
-            onChange={(o) => apply({ ...prefs, themeId: o.id })}
-            ariaLabel="Theme"
-            hint="Your theme follows you across the whole site."
+        <Section icon={Monitor} title="Appearance" desc="Effects, motion, and logos across the whole site.">
+          <Toggle
+            on={prefs.showImageLogos}
+            onChange={(v) => apply({ ...prefs, showImageLogos: v })}
+            label="Image Logos"
+            desc="Use studio, network, and streaming-service logos where available instead of text."
           />
-          <div className="mt-4 border-t border-white/[0.06]">
+          <div className="mt-3 border-t border-white/[0.06]">
             <Toggle
               on={prefs.reducedMotion}
               onChange={(v) => apply({ ...prefs, reducedMotion: v })}
-              label="Reduce motion"
-              desc="Disables animations and transitions site-wide."
+              label="Reduce Motion"
+              desc="Disable animations and transitions site-wide."
             />
           </div>
-          <div className="mt-3 border-t border-white/[0.06]">
+          <div className="mt-3 pt-1 border-t border-white/[0.06]">
             <Toggle
-              on={prefs.showImageLogos}
-              onChange={(v) => apply({ ...prefs, showImageLogos: v })}
-              label="Show image logos"
-              desc="Show the movie or show logo instead of the title on hero banners."
+              on={prefs.showContinueWatching}
+              onChange={(v) => apply({ ...prefs, showContinueWatching: v })}
+              label="Continue Watching"
+              desc="Show unfinished movies and episodes on Home."
+            />
+          </div>
+          <div className="mt-3 pt-1 border-t border-white/[0.06]">
+            <Toggle
+              on={prefs.showForYou}
+              onChange={(v) => apply({ ...prefs, showForYou: v })}
+              label="For You"
+              desc="Show recommendations based on your watch history."
             />
           </div>
         </Section>
@@ -524,17 +470,33 @@ export function SettingsPage() {
           <div className="flex flex-col gap-4">
             <div>
               <Toggle
-                on={prefs.trackHistory}
-                onChange={(v) => apply({ ...prefs, trackHistory: v })}
-                label="Save Watch History"
-                desc="Keep track of the movies and TV shows you watch by adding them to your history."
+                on={prefs.trackProgress}
+                onChange={(v) => apply({ ...prefs, trackProgress: v })}
+                label="Resume Playback"
+                desc="Save your playback progress so you can continue watching where you left off."
               />
               <div className="mt-3 pt-1 border-t border-white/[0.06]">
                 <Toggle
-                  on={prefs.trackProgress}
-                  onChange={(v) => apply({ ...prefs, trackProgress: v })}
-                  label="Resume Playback"
-                  desc="Save your playback progress so you can continue watching where you left off."
+                  on={prefs.autoPlayNext}
+                  onChange={(v) => apply({ ...prefs, autoPlayNext: v })}
+                  label="Auto-play Next"
+                  desc="Automatically play the next episode."
+                />
+              </div>
+              <div className="mt-3 pt-1 border-t border-white/[0.06]">
+                <Toggle
+                  on={prefs.autoSkipIntros}
+                  onChange={(v) => apply({ ...prefs, autoSkipIntros: v })}
+                  label="Auto-skip Intros & Recaps"
+                  desc="Skip intros and recaps when timing data is available."
+                />
+              </div>
+              <div className="mt-3 pt-1 border-t border-white/[0.06]">
+                <Toggle
+                  on={prefs.spoilerShield}
+                  onChange={(v) => apply({ ...prefs, spoilerShield: v })}
+                  label="Spoiler Shield"
+                  desc="Hide artwork and descriptions for unwatched episodes."
                 />
               </div>
             </div>
@@ -567,7 +529,7 @@ export function SettingsPage() {
                   onPointerCancel={endDrag}
                   onContextMenu={(e) => e.preventDefault()}
                   className={cx(
-                    "relative flex items-center gap-3 h-12 px-3 rounded-xl glass-dropdown theme-glass-drop border transition-[transform,border-color,background-color,box-shadow] duration-150 will-change-transform cursor-grab active:cursor-grabbing select-none",
+                    "relative flex items-center gap-3 h-12 px-3 rounded-xl surface-dropdown surface-nav-drop border transition-[transform,border-color,background-color,box-shadow] duration-150 will-change-transform cursor-grab active:cursor-grabbing select-none",
                     isDragging
                       ? "scale-[1.05] bg-white/10 border-white/40 shadow-[0_10px_30px_rgba(0,0,0,0.45)] z-10"
                       : isOver
@@ -578,7 +540,7 @@ export function SettingsPage() {
                   <GripVertical className="w-4 h-4 text-white/40 shrink-0" />
                   <span className="flex-1 min-w-0 truncate text-sm text-white/90">{p?.name ?? id}</span>
                   {p?.recommended && (
-                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#fbbf24] shrink-0">
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#ff9f0a] shrink-0">
                       <Star className="w-3 h-3" />
                       Recommended
                     </span>
@@ -593,7 +555,59 @@ export function SettingsPage() {
           </div>
         </Section>
 
-        <Section icon={Archive} title="My data" desc="Everything below is stored locally in your browser.">
+        <Section icon={Search} title="Search" desc="Control how the search page behaves.">
+          <Toggle
+            on={prefs.rememberRecentSearches}
+            onChange={(v) => apply({ ...prefs, rememberRecentSearches: v })}
+            label="Remember Recent Searches"
+            desc="Keep your recent searches for quick access."
+          />
+        </Section>
+
+        <Section icon={Download} title="App" desc={`Install ${site.name} as a standalone app.`}>
+          <div className="flex flex-col items-start gap-3">
+            {installed ? (
+              <div className="flex items-center gap-2 text-sm font-medium text-[#30d158]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {site.name} is installed.
+              </div>
+            ) : deferredPrompt ? (
+              <button
+                onClick={requestInstall}
+                className={cx(BTN_PILL, "bg-white text-black border-transparent hover:bg-white/90")}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Install
+              </button>
+            ) : (
+              <button
+                disabled
+                className={cx(BTN_PILL, "bg-white/10 text-white/30 cursor-not-allowed hover:bg-white/10")}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Install
+              </button>
+            )}
+            <p className="text-[13px] text-white/40 leading-snug">
+              {deferredPrompt
+                ? "Add Movieo to your device for an app-like experience with instant access and full-screen viewing."
+                : "Use your browser's menu to install the app. On iPhone or iPad, use the Share button, then \u201cAdd to Home Screen.\u201d"}
+            </p>
+          </div>
+        </Section>
+
+        <Section icon={ShieldCheck} title="Privacy & Data" desc="Your activity stays in this browser and never leaves your device.">
+          <Toggle
+            on={!prefs.trackHistory}
+            onChange={(v) => apply({ ...prefs, trackHistory: !v })}
+            label="Pause Watch History"
+            desc="Stop saving viewing activity and using it for personalization."
+          />
+          <div className="mt-4 border-t border-white/[0.06]">
+            <p className="text-[11px] uppercase tracking-wider text-white/30 font-semibold mt-3 mb-2">Data Management</p>
+          </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 py-1">
             <div className="flex items-center gap-3 min-w-0">
               <History className="w-4.5 h-4.5 text-white/50 shrink-0" />
@@ -639,7 +653,7 @@ export function SettingsPage() {
                   Clear all
                 </button>
               </div>
-              {historySuccess !== null && <p className="text-[13px] text-[#2bd576] animate-fade-in-up">{historySuccess} title{historySuccess === 1 ? "" : "s"} imported successfully</p>}
+              {historySuccess !== null && <p className="text-[13px] text-[#30d158] animate-fade-in-up">{historySuccess} title{historySuccess === 1 ? "" : "s"} imported successfully</p>}
             </div>
           </div>
 
@@ -688,7 +702,7 @@ export function SettingsPage() {
                   Clear all
                 </button>
               </div>
-              {listSuccess !== null && <p className="text-[13px] text-[#2bd576] animate-fade-in-up">{listSuccess} list{listSuccess === 1 ? "" : "s"} imported successfully</p>}
+              {listSuccess !== null && <p className="text-[13px] text-[#30d158] animate-fade-in-up">{listSuccess} list{listSuccess === 1 ? "" : "s"} imported successfully</p>}
             </div>
           </div>
 
@@ -696,26 +710,26 @@ export function SettingsPage() {
             <div className="flex items-center gap-3 min-w-0">
               <RotateCcw className="w-4.5 h-4.5 text-white/50 shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white/90">Reset everything</p>
+                <p className="text-sm font-medium text-white/90">Clear storage</p>
                 <p className="text-[13px] text-white/45 mt-0.5">
-                  Erases history, progress, lists, and preferences. This can&apos;t be undone.
+                  Removes recent searches, server order, and restores playback settings to defaults.
                 </p>
               </div>
             </div>
             <button
-              onClick={() => setConfirming("reset")}
+              onClick={() => setConfirming("storage")}
               className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 text-xs font-semibold transition-colors cursor-pointer self-start sm:self-auto"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Reset
+              Clear
             </button>
           </div>
         </Section>
 
         <section className="rounded-2xl border border-white/10 bg-white/[0.05] px-6 py-5">
           <p className="text-[13px] text-white/40 leading-relaxed">
-            {site.name} &mdash; {site.description} Your theme, playback, and accessibility preferences are stored only in
-            this browser&apos;s localStorage and never leave your device.
+            Saved automatically on this device. Everything you change here is stored only in this
+            browser&apos;s localStorage and never leaves your device.
           </p>
         </section>
       </div>
@@ -723,13 +737,13 @@ export function SettingsPage() {
       {confirming &&
         createPortal(
           <div className="fixed inset-0 z-[160]">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/70" />
             <div
-              ref={confirmRef}
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-label={confirmTitle}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm surface-dropdown rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
             >
               <div className="flex items-start justify-between gap-3 px-5 pt-5">
                 <div className="flex items-center gap-2.5">

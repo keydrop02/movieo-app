@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Check, ChevronDown, Copy, Download, X } from "lucide-react"
 import { cx } from "@/lib/utils"
+import { reportError } from "@/lib/error-reporting"
+import { useDialog } from "@/lib/use-dialog"
 
 interface DownloadLink {
   url: string
@@ -65,20 +67,17 @@ export function DownloadModal({
   const rootRef = useRef<HTMLDivElement>(null)
   const busyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const close = useCallback(() => setOpen(false), [])
+  const dialogRef = useDialog<HTMLDivElement>(open, close)
 
   useEffect(() => {
     if (!open) return
     const onClick = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
     document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
     return () => {
       document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
     }
   }, [open])
 
@@ -92,20 +91,25 @@ export function DownloadModal({
       setLoading(true)
       setMessage(null)
       setLinks([])
-      const url =
+      // Same-origin on purpose: going straight to the upstream host meant the
+      // request was blocked by our own CSP in production and silently depended
+      // on that host's CORS policy. /api/downloads proxies it.
+      const qs =
         item.kind === "tv"
-          ? `https://downloads.shegu.st/tv/${item.id}/${seas}/${ep}`
-          : `https://downloads.shegu.st/movie/${item.id}`
+          ? `kind=tv&id=${item.id}&season=${seas}&episode=${ep}`
+          : `kind=movie&id=${item.id}`
       try {
-        const res = await fetch(url)
+        const res = await fetch(`/api/downloads?${qs}`)
         if (!res.ok) throw new Error("bad status")
         const data = await res.json()
-        setLinks(Array.isArray(data.links) ? data.links : [])
-        if (!Array.isArray(data.links) || data.links.length === 0) {
+        const nextLinks: DownloadLink[] = Array.isArray(data.links) ? data.links : []
+        setLinks(nextLinks)
+        if (nextLinks.length === 0) {
           setMessage("No download links available for this title.")
         }
-      } catch {
+      } catch (err) {
         setMessage("Couldn't load download links. Please try again.")
+        reportError("downloads.load-links", err, "warn")
       } finally {
         setLoading(false)
       }
@@ -209,13 +213,13 @@ export function DownloadModal({
 
   const panel = (
     <div className="fixed inset-0 z-[160]">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/70" />
       <div
-        ref={rootRef}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Download ${item.title}`}
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg max-h-[80vh] flex flex-col bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg max-h-[80vh] flex flex-col surface-modal rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -250,7 +254,7 @@ export function DownloadModal({
                 <ChevronDown className="w-3 h-3 text-white/60" />
               </button>
               {seasonOpen && (
-                <div className="absolute top-full mt-1.5 left-0 w-36 bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in">
+                <div className="absolute top-full mt-1.5 left-0 w-36 surface-nav-drop rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in">
                   {seasons.length === 0
                     ? [season].map((s) => <Picky key={s} label={`S${s}`} active onClick={() => pickSeason(s)} />)
                     : seasons.map((s) => (
@@ -273,7 +277,7 @@ export function DownloadModal({
                 <ChevronDown className="w-3 h-3 text-white/60" />
               </button>
               {episodeOpen && (
-                <div className="absolute top-full mt-1.5 left-0 w-36 max-h-52 overflow-y-auto bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in glass-scrollbar">
+                <div className="absolute top-full mt-1.5 left-0 w-36 max-h-52 overflow-y-auto surface-nav-drop rounded-xl shadow-2xl p-1.5 z-50 animate-dropdown-in app-scrollbar">
                   {episodes.length === 0
                     ? [1].map((e) => <Picky key={e} label={`E${e}`} onClick={() => pickEpisode(e)} />)
                     : episodes.map((e) => (
@@ -285,7 +289,7 @@ export function DownloadModal({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5 glass-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 app-scrollbar">
           {loading ? (
             <div className="space-y-2.5">
               {[0, 1, 2].map((i) => (

@@ -1,41 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ExternalLink, Play, X } from "lucide-react"
 import { ScrollRail } from "@/components/scroll-rail"
 import { img } from "@/lib/tmdb/images"
+import { reportError } from "@/lib/error-reporting"
+import { useDialog } from "@/lib/use-dialog"
+import { loadYtApi } from "@/lib/youtube"
 import type { Person, Video } from "@/lib/tmdb/types"
-
-declare global {
-  interface Window {
-    YT: {
-      Player: new (div: HTMLElement, opts: Record<string, unknown>) => {
-        mute: () => void
-        unMute: () => void
-        destroy: () => void
-        onError?: (e: { data?: number }) => void
-      }
-    }
-    onYouTubeIframeAPIReady: () => void
-  }
-}
-
-let ytApiPromise: Promise<void> | null = null
-function loadYtApi() {
-  if (ytApiPromise) return ytApiPromise
-  ytApiPromise = new Promise<void>((resolve) => {
-    if (typeof window === "undefined") return resolve()
-    if (window.YT?.Player) return resolve()
-    const tag = document.createElement("script")
-    tag.src = "https://www.youtube.com/iframe_api"
-    document.head.appendChild(tag)
-    window.onYouTubeIframeAPIReady = () => resolve()
-  })
-  return ytApiPromise
-}
-
-const EMBED_DISALLOWED = new Set([101, 150])
 
 export function SectionHeading({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xl lg:text-2xl font-bold text-white/90 px-2">{children}</h2>
@@ -55,9 +29,15 @@ export function CastSection({ cast }: { cast: Person[] }) {
             <Link key={p.id} href={`/person/${p.id}`} className="flex flex-col items-center gap-3 flex-none w-32 lg:w-36 group cursor-pointer text-left">
               <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-white/5 border border-white/10 shadow-lg transition-transform duration-300 group-hover:scale-110 group-hover:border-white/30 group-hover:shadow-white/20 z-10">
                 {p.profile_path ? (
-                  <img className="w-full h-full object-cover" loading="lazy" src={img(p.profile_path, "w300") ?? undefined} alt={p.name} />
+                  <Image
+                    fill
+                    sizes="(max-width: 768px) 96px, 112px"
+                    className="object-cover"
+                    src={img(p.profile_path, "w300") ?? ""}
+                    alt={p.name}
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/40 text-xl font-semibold">{p.name.slice(0, 1)}</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-white/40 text-xl font-semibold">{p.name.slice(0, 1)}</div>
                 )}
               </div>
               <div className="text-center w-full">
@@ -92,36 +72,30 @@ function TrailerCard({ video }: { video: Video }) {
   const [open, setOpen] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const playerHostRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("keydown", onKey)
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.removeEventListener("keydown", onKey)
-      document.body.style.overflow = ""
-    }
-  }, [open])
+  const close = useCallback(() => setOpen(false), [])
+  const dialogRef = useDialog<HTMLDivElement>(open, close)
 
   useEffect(() => {
     if (!open || !playerHostRef.current) return
     let player: { destroy: () => void } | null = null
     let cancelled = false
-    loadYtApi().then(() => {
-      if (cancelled || !playerHostRef.current) return
-      player = new window.YT.Player(playerHostRef.current, {
-        videoId: video.key,
-        playerVars: { autoplay: 1, rel: 0 },
-        events: {
-          onError: () => {
-            if (!cancelled) setBlocked(true)
+    loadYtApi()
+      .then(() => {
+        if (cancelled || !playerHostRef.current) return
+        player = new window.YT.Player(playerHostRef.current, {
+          videoId: video.key,
+          playerVars: { autoplay: 1, rel: 0 },
+          events: {
+            onError: () => {
+              if (!cancelled) setBlocked(true)
+            },
           },
-        },
+        })
       })
-    })
+      .catch((err) => {
+        if (!cancelled) setBlocked(true)
+        reportError("trailer.youtube-api", err, "warn")
+      })
     return () => {
       cancelled = true
       player?.destroy()
@@ -138,9 +112,10 @@ function TrailerCard({ video }: { video: Video }) {
         className="relative w-full aspect-video rounded-xl overflow-hidden bg-black/20 border border-white/5 group cursor-pointer block"
         aria-label={video.name}
       >
-        <img
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          loading="lazy"
+        <Image
+          fill
+          sizes="(max-width: 1024px) 320px, 420px"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
           src={`https://i.ytimg.com/vi/${video.key}/hqdefault.jpg`}
           alt={video.name}
         />
@@ -149,15 +124,25 @@ function TrailerCard({ video }: { video: Video }) {
             <Play className="w-5 h-5 fill-current" />
           </span>
         </span>
-        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-[11px] font-medium text-white max-w-[70%] truncate">
+        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/75 border border-white/15 text-[11px] font-medium text-white max-w-[70%] truncate">
           {video.name}
         </span>
       </button>
 
       {open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-4xl">
+          <div
+            className="absolute inset-0 bg-black/80"
+            onClick={close}
+            aria-hidden
+          />
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Trailer: ${video.name}`}
+            className="relative w-full max-w-4xl"
+          >
             <button
               onClick={() => setOpen(false)}
               aria-label="Close trailer"

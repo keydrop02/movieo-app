@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { CalendarDays, Film, Info, Play } from "lucide-react"
 import { img } from "@/lib/tmdb/images"
 import type { MediaItem } from "@/lib/tmdb/types"
-import { cx, year, rateColor } from "@/lib/utils"
+import { cx, mediaUrl, year, rateColor } from "@/lib/utils"
 import { AddToListPopover } from "@/components/add-to-list"
 import { RateStar } from "@/components/rate-star"
 
@@ -49,7 +50,21 @@ export function HeroCarousel({
           WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent 98%)",
         }}
       >
-        <img className="h-full w-full object-cover object-top" src={src ?? undefined} alt={slide.title} />
+        {/* The hero backdrop is the largest paint on the site and is above the
+            fold, so it is the one image that must not be lazy-loaded or
+            asynchronously decoded. `priority` also emits preload hints, which
+            `fetchPriority` alone cannot do since the browser will not know the
+            URL until the markup arrives. */}
+        {src && (
+          <Image
+            fill
+            priority
+            sizes="100vw"
+            className="h-full w-full object-cover object-top"
+            src={src}
+            alt={slide.title}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent pointer-events-none" />
       </div>
@@ -79,16 +94,16 @@ export function HeroCarousel({
             >
               <PlayButton />
             </Link>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5">
               <AddToListPopover
                 label="Add to list"
                 item={slide}
                 triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
               />
             </div>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5">
               <Link
-                href={slide.kind === "movie" ? `/movie/${slide.id}` : `/series/${slide.id}`}
+                href={mediaUrl(slide)}
                 className="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
                 aria-label="More Info"
               >
@@ -139,10 +154,13 @@ function HeroTitle({ slide, src }: { slide: MediaItem; src: string | null | unde
         {slide.title}
       </h1>
       {!logoFailed && (
-        <img
+        <Image
           key={src}
-          className="hero-logo max-h-28 lg:max-h-48 object-contain origin-center lg:origin-left drop-shadow-2xl"
-          src={img(src, "w500") ?? undefined}
+          width={500}
+          height={140}
+          className="hero-logo max-h-28 lg:max-h-48 max-w-[280px] lg:max-w-[520px] w-auto h-auto object-contain origin-center lg:origin-left drop-shadow-2xl"
+          src={img(src, "w500") ?? ""}
+          sizes="(max-width: 1024px) 280px, 520px"
           alt={slide.title}
           onError={() => setFailed(true)}
         />

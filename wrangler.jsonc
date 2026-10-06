@@ -10,5 +10,19 @@
     "directory": "dist/client",
     "not_found_handling": "none",
     "binding": "ASSETS"
-  }
+  },
+  // Distributed rate limiting. `lib/rate-limit.ts` looks for a `RATE_LIMITER`
+  // binding and uses it when present, falling back to a bounded per-isolate map
+  // otherwise. Without this entry the fallback applies, which means a limit
+  // reset by deploying a new version and is per-colony rather than global.
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 240,
+        "period": 60
+      }
+    }
+  ]
 }

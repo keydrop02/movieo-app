@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only"
 
-import type { Episode, MediaDetail, MediaItem, MediaKind, WatchProvider } from "./types"
+import type { Episode, MediaDetail, MediaItem, MediaKind, TrendingWindow, WatchProvider } from "./types"
 import { getEnv } from "@/lib/env"
 
 const BASE = "https://api.themoviedb.org/3"
@@ -96,6 +96,28 @@ function list(raw: any, kind: MediaKind): MediaItem[] {
   return (raw.results ?? []).map((r: any) => toItem(r, kind))
 }
 
+/**
+ * TMDB some titles return an empty `/recommendations` list, and an empty array
+ * is truthy so a `??` fallback never fires. Use recommendations only; if they
+ * come back empty, re-use the (relevance-ordered) similar list so the
+ * "You Might Also Like" rail always has matching content.
+ */
+function mergeSimilar(raw: any, kind: MediaKind): MediaItem[] {
+  const pick = (r: any, seen: Set<number>) => {
+    const id = Number(r.id)
+    if (!id || id === raw.id || seen.has(id)) return false
+    seen.add(id)
+    return true
+  }
+  const recs = raw.recommendations?.results ?? []
+  if (recs.length > 0) {
+    const seen = new Set<number>()
+    return list({ results: recs.filter((r: any) => pick(r, seen)) }, kind)
+  }
+  const seen = new Set<number>()
+  return list({ results: (raw.similar?.results ?? []).filter((r: any) => pick(r, seen)) }, kind)
+}
+
 export async function getCurated(key: string, kind?: MediaKind): Promise<MediaItem[]> {
   const cfg = CURATED_TO_ENDPOINT[key]
   if (!cfg) throw new Error(`Unknown curated list key: ${key}`)
@@ -109,9 +131,12 @@ export async function getCurated(key: string, kind?: MediaKind): Promise<MediaIt
   return items.slice(0, 20)
 }
 
-export async function getTrending(kind: MediaKind, window: "week" | "day" = "week"): Promise<MediaItem[]> {
-  const raw = await tmdb<any>(`/trending/${kind}/${window}`)
-  return list(raw, kind)
+export async function getTrending(kind: MediaKind | "all", timeWindow: TrendingWindow = "week"): Promise<MediaItem[]> {
+  const raw = await tmdb<any>(`/trending/${kind}/${timeWindow}`)
+  if (kind !== "all") return list(raw, kind)
+  return (raw.results ?? [])
+    .filter((r: any) => r.media_type === "movie" || r.media_type === "tv")
+    .map((r: any) => toItem(r, r.media_type))
 }
 
 export interface PersonDetail {
@@ -231,13 +256,38 @@ export async function getTvCategory(category: TvCategory): Promise<MediaItem[]> 
   return list(raw, "tv")
 }
 
+export const SEARCH_PAGE_SIZE = 20
+export const SEARCH_MAX_PAGES = 3
+export const SEARCH_MAX_RESULTS = SEARCH_PAGE_SIZE * SEARCH_MAX_PAGES
+
+/**
+ * TMDB caps /search/multi at one page of 20 results, so reaching the 60-item
+ * target means fanning out across pages. Pages are requested together rather
+ * than lazily: the search box is debounced, and a sequential walk would show a
+ * partial grid that refills twice. Dedupe is required because TMDB's relevance
+ * ranking overlaps between adjacent pages.
+ */
 export async function searchAll(query: string): Promise<MediaItem[]> {
-  if (!query.trim()) return []
-  const raw = await tmdb<any>("/search/multi", { query, include_adult: "false" })
-  return (raw.results ?? [])
-    .filter((r: any) => r.media_type === "movie" || r.media_type === "tv")
-    .slice(0, 20)
-    .map((r: any) => toItem(r, r.media_type))
+  const q = query.trim()
+  if (!q) return []
+  const pages = await Promise.all(
+    Array.from({ length: SEARCH_MAX_PAGES }, (_, i) =>
+      tmdb<any>("/search/multi", { query: q, include_adult: "false", page: i + 1 }),
+    ),
+  )
+  const seen = new Set<string>()
+  const out: MediaItem[] = []
+  for (const raw of pages) {
+    for (const r of raw.results ?? []) {
+      if (r.media_type !== "movie" && r.media_type !== "tv") continue
+      const key = `${r.media_type}:${r.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(toItem(r, r.media_type))
+      if (out.length >= SEARCH_MAX_RESULTS) return out
+    }
+  }
+  return out
 }
 
 export async function getGenres(kind: MediaKind): Promise<Array<{ id: number; name: string }>> {
@@ -427,7 +477,7 @@ export async function getDetail(kind: MediaKind, id: number): Promise<MediaDetai
       .slice(0, 18)
       .map((c) => ({ id: c.id, name: c.name, profile_path: c.profile_path ?? null, character: c.character, order: c.order })),
     videos: pickTrailers(raw.videos?.results ?? []),
-    similar: list({ results: raw.similar?.results ?? raw.recommendations?.results ?? [] }, kind),
+    similar: mergeSimilar(raw, kind),
     providers,
     title_logo: pickTitleLogo(raw.images),
     collection: raw.belongs_to_collection

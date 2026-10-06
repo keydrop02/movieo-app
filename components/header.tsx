@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bookmark, Clapperboard, House, Search, Tv, User } from "lucide-react"
+import { Bookmark, Clapperboard, House, Search, Settings, Tv } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { SettingsMenu } from "@/components/settings-menu"
 import { cx } from "@/lib/utils"
@@ -35,6 +35,12 @@ export function Header() {
       setPill(null)
       return
     }
+    // The watch route hides the whole header (`html.route-watch header`).
+    // During back-navigation this can still run while the header is hidden, and
+    // measuring a `display:none` element yields a zero-width pill that renders
+    // as nothing and never re-measures itself. Bail and let the ResizeObserver
+    // and navigation listeners below correct it once the header is visible.
+    if (el.offsetWidth === 0) return
     setPill({
       x: Math.round(el.getBoundingClientRect().left - nav.getBoundingClientRect().left) + (tab === 0 ? 6 : 0),
       w: el.offsetWidth,
@@ -51,6 +57,26 @@ export function Header() {
     return () => window.removeEventListener("resize", measure)
   }, [measure])
 
+  // Re-measure when the nav actually has a size again (it collapses to 0 when
+  // the watch route hides the header via `display:none`), and on popstate /
+  // bfcache restore ("back") where the layout effect does not reliably fire.
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const ro = new ResizeObserver(measure)
+    ro.observe(nav)
+    return () => ro.disconnect()
+  }, [measure])
+
+  useEffect(() => {
+    window.addEventListener("popstate", measure)
+    window.addEventListener("pageshow", measure)
+    return () => {
+      window.removeEventListener("popstate", measure)
+      window.removeEventListener("pageshow", measure)
+    }
+  }, [measure])
+
   const searchActive = pathname === "/search"
 
   if (pathname === "/shorts") return null
@@ -59,8 +85,8 @@ export function Header() {
     <header className="pointer-events-none header-row flex fixed top-0 left-0 right-0 z-50 px-6 lg:px-12 py-4 justify-between items-center lg:py-6">
       <nav
         ref={navRef}
-        role="tablist"
-        className="hidden lg:flex relative theme-glass-tint desktop-nav items-center rounded-full border border-white/10 shadow-2xl pointer-events-auto gap-1 mx-auto"
+        aria-label="Primary"
+        className="hidden lg:flex relative surface-nav desktop-nav items-center rounded-full border border-white/10 shadow-2xl pointer-events-auto gap-1 mx-auto"
       >
         {pill && (
           <div
@@ -81,6 +107,7 @@ export function Header() {
                 itemRefs.current[i] = el
               }}
               href={l.href}
+              aria-current={itemActive ? "page" : undefined}
               className={cx(
                 "relative z-10 flex items-center justify-center gap-2 px-6 rounded-full text-sm font-medium nav-item whitespace-nowrap",
                 itemActive ? "text-black theme-icon-active" : "text-white/60 hover:text-white",
@@ -106,6 +133,7 @@ export function Header() {
         <button
           ref={searchBtnRef}
           aria-label="Search"
+          aria-current={searchActive ? "page" : undefined}
           onClick={() => router.push("/search")}
           className={cx(
             "relative z-10 flex items-center justify-center rounded-full nav-item is-icon",
@@ -148,7 +176,7 @@ aria-label="Profile"
         onMouseDown={(e) => e.stopPropagation()}
         className="relative flex items-center justify-center rounded-full nav-item is-icon text-white/60 hover:text-white hover:bg-white/[0.08]"
       >
-        <User className="w-[18px] h-[18px]" />
+        <Settings className="w-[18px] h-[18px]" />
       </button>
     </div>
   )
@@ -178,68 +206,74 @@ function MobileBar({
     { href: "/series", label: "TV Shows", Icon: Tv },
     { href: "/lists", label: "My List", Icon: Bookmark },
   ]
-  const btn =
-    "relative flex items-center justify-center w-[13vw] max-w-[56px] h-10 rounded-full transition-colors duration-300"
+  const btn = "nav-item"
   const searchActive = pathname === "/search"
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center h-16 px-3.5 rounded-full shadow-2xl theme-glass-tint border border-white/10 gap-1">
-      {items.map(({ href, label, Icon }) => {
-        const active = isNavActive(pathname, href)
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-label={label}
-            className={cx(
-              btn,
-              active ? "theme-glass-tint-active text-white" : "text-[#9ca3af] hover:text-white",
-            )}
-          >
-            <Icon className="w-6 h-6" />
-          </Link>
-        )
-      })}
+    <div className="bottom-nav-row">
+      <nav aria-label="Primary" className="bottom-nav">
+        {items.map(({ href, label, Icon }) => {
+          const active = isNavActive(pathname, href)
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
+              className={cx(
+                btn,
+                active ? "is-active theme-surface-active text-white" : "text-[#a1a1a6] hover:text-white",
+              )}
+            >
+              <Icon />
+            </Link>
+          )
+        })}
+        <button
+          aria-label="Settings"
+          data-profile-trigger
+          onPointerDown={(e) => {
+            suppressTap.current = false
+            clearLongPress()
+            if (e.pointerType === "mouse") return
+            longPressTimer.current = window.setTimeout(() => {
+              suppressTap.current = true
+              clearLongPress()
+              onLongPress()
+            }, 500)
+          }}
+          onPointerUp={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onPointerLeave={clearLongPress}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            clearLongPress()
+            onLongPress()
+          }}
+          onClick={() => {
+            clearLongPress()
+            if (suppressTap.current) {
+              suppressTap.current = false
+              return
+            }
+            onOpenSettings()
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          className={cx(btn, "text-[#a1a1a6] hover:text-white")}
+        >
+          <Settings />
+        </button>
+      </nav>
       <Link
         href="/search"
         aria-label="Search"
-        className={cx(btn, searchActive ? "theme-glass-tint-active text-white" : "text-[#9ca3af] hover:text-white")}
+        aria-current={searchActive ? "page" : undefined}
+        className={cx(
+          "bottom-nav-search",
+          searchActive ? "is-active theme-surface-active text-white" : "text-[#a1a1a6] hover:text-white",
+        )}
       >
-        <Search className="w-6 h-6" />
+        <Search />
       </Link>
-      <button
-        aria-label="Settings"
-        data-profile-trigger
-        onPointerDown={(e) => {
-          suppressTap.current = false
-          clearLongPress()
-          if (e.pointerType === "mouse") return
-          longPressTimer.current = window.setTimeout(() => {
-            suppressTap.current = true
-            clearLongPress()
-            onLongPress()
-          }, 500)
-        }}
-        onPointerUp={clearLongPress}
-        onPointerCancel={clearLongPress}
-        onPointerLeave={clearLongPress}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          clearLongPress()
-          onLongPress()
-        }}
-        onClick={() => {
-          clearLongPress()
-          if (suppressTap.current) {
-            suppressTap.current = false
-            return
-          }
-          onOpenSettings()
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-        className={cx(btn, "text-[#9ca3af] hover:text-white")}
-      >
-        <User className="w-6 h-6" />
-      </button>
     </div>
   )
 }

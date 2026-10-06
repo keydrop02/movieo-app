@@ -54,14 +54,14 @@ export function SettingsMenu({
 
   return (
     <div ref={ref}>
-      <div className="profile-portal-menu fixed z-[2147483000] w-56 rounded-xl glass-dropdown theme-glass-drop overflow-hidden flex flex-col py-1 pointer-events-none hidden lg:flex"
+      <div className="profile-portal-menu fixed z-[2147483000] w-56 rounded-xl surface-dropdown surface-nav-drop overflow-hidden flex flex-col py-1 pointer-events-none hidden lg:flex"
         style={pos}
       >
         {items("px-4 py-2.5", onClose)}
       </div>
       <div
         role="none"
-        className="fixed left-1/2 -translate-x-1/2 w-56 rounded-2xl overflow-hidden flex flex-col py-1 z-[60] pointer-events-none theme-glass-tint backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-2xl mobile-profile-menu lg:hidden"
+        className="fixed left-1/2 -translate-x-1/2 w-56 rounded-2xl overflow-hidden flex flex-col py-1 z-[60] pointer-events-none surface-nav border border-[#2c2c2f] shadow-2xl mobile-profile-menu lg:hidden"
       >
         {items("px-4 py-3", onClose)}
       </div>

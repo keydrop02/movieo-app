@@ -1,10 +1,15 @@
-import type { ReactNode } from "react"
+"use client"
+
+import { useState, type ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
-import { Download, Play } from "lucide-react"
+import { Download } from "lucide-react"
 import { AddToListPopover } from "@/components/add-to-list"
+import { HeroPanelSlot } from "@/components/detail/hero-panel-slot"
+import { OverviewText } from "@/components/detail/overview-text"
 import { DownloadModal } from "@/components/download-modal"
+import { PlayButton } from "@/components/detail/play-button"
 import { WatchedButton } from "@/components/detail/watched-button"
-import { PillButton } from "@/components/pill"
 import { RateStar } from "@/components/rate-star"
 import { img } from "@/lib/tmdb/images"
 import type { MediaDetail, Person } from "@/lib/tmdb/types"
@@ -18,6 +23,7 @@ export function DetailHero({
   const backdropSrc = img(detail.backdrop_path, "w1280")
   const titleLogo = detail.title_logo ? img(detail.title_logo, "w500") : null
   const name = detail.title
+  const [logoFailed, setLogoFailed] = useState(false)
 
   return (
     <div className="relative w-full">
@@ -28,21 +34,39 @@ export function DetailHero({
           WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent 98%)",
         }}
       >
-        <img className="h-full w-full object-cover object-top" src={backdropSrc ?? undefined} alt={name} />
+        {backdropSrc && (
+          <Image
+            fill
+            priority
+            sizes="100vw"
+            className="h-full w-full object-cover object-top"
+            src={backdropSrc}
+            alt={name}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-transparent to-transparent pointer-events-none hidden lg:block" />
       </div>
 
-<div className="relative z-30 -mt-[24rem] lg:-mt-[22rem] lg:flex lg:items-end lg:justify-between lg:gap-10 px-6 lg:px-16">
+<div data-hero-row className="relative z-30 -mt-[24rem] lg:-mt-[22rem] lg:flex lg:items-end lg:justify-between lg:gap-10 px-6 lg:px-16">
         <div className="w-full max-w-[700px] lg:max-w-[650px] lg:min-w-0 flex flex-col items-center lg:items-start">
-          {titleLogo && (
-            <img className="detail-logo max-h-28 lg:max-h-48 object-contain origin-center lg:origin-left drop-shadow-2xl" src={titleLogo} alt="" role="presentation" />
+          {titleLogo && !logoFailed && (
+            <Image
+              className="detail-logo max-h-28 lg:max-h-48 max-w-[280px] lg:max-w-[520px] w-auto h-auto object-contain origin-center lg:origin-left drop-shadow-2xl"
+              src={titleLogo}
+              width={500}
+              height={140}
+              sizes="(max-width: 1024px) 280px, 520px"
+              alt=""
+              role="presentation"
+              onError={() => setLogoFailed(true)}
+            />
           )}
-          <h1 className={cx("detail-title-text text-3xl lg:text-5xl font-bold text-white drop-shadow-2xl text-center lg:text-left", !titleLogo && "detail-title-only")}>
+          <h1 className={cx("detail-title-text text-3xl lg:text-5xl font-bold text-white drop-shadow-2xl text-center lg:text-left", !titleLogo || logoFailed ? "detail-title-only" : "")}>
             {name}
           </h1>
 
-          <div className="mt-4 lg:mt-5 flex items-center gap-2 text-sm lg:text-lg text-white/90 font-medium flex-wrap justify-center lg:justify-start">
+          <div data-hero-genres className="mt-4 lg:mt-5 flex items-center gap-2 text-sm lg:text-base text-white/90 font-medium flex-wrap justify-center lg:justify-start">
             {detail.genres.map((g, i) => (
               <span key={g.id}>
                 {i > 0 && <span className="text-white/40 mx-2">•</span>}
@@ -51,30 +75,28 @@ export function DetailHero({
             ))}
           </div>
 
-          <div className="mt-4 lg:mt-5 flex items-center gap-3 flex-wrap justify-center lg:justify-start">
-            <Link
+          <div data-hero-actions className="mt-4 lg:mt-5 flex items-center gap-3 flex-wrap justify-center lg:justify-start">
+            <PlayButton
+              id={detail.id}
+              kind={detail.kind}
               href={
                 detail.kind === "movie"
                   ? `/watch/movie/${detail.id}`
                   : `/watch/tv/${detail.id}/${detail.seasons?.[0]?.season_number ?? 1}/1`
               }
-            >
-              <PillButton size="lg" className="px-6 min-w-[130px]">
-                <Play className="w-5 h-5 mr-1.5 fill-current" />
-                <span>Play</span>
-              </PillButton>
-            </Link>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5 shrink-0">
+              className="px-5 min-w-[112px] text-base"
+            />
+            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5 shrink-0">
               <AddToListPopover
                 label="Add to list"
                 item={detail}
                 triggerClass="flex items-center justify-center h-full w-full rounded-full transition-colors hover:bg-white/20 active:bg-white/30 outline-none cursor-pointer"
               />
             </div>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5 shrink-0">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5 shrink-0">
               <DownloadTrigger item={detail} />
             </div>
-            <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] rounded-full bg-white/10 backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 shadow-lg shadow-black/5 shrink-0">
+            <div className="hero-action-pill inline-flex items-center justify-center h-[44px] w-[44px] rounded-full bg-black/55 border border-white/15 shadow-lg shadow-black/5 shrink-0">
               <WatchedButton id={detail.id} kind={detail.kind} />
             </div>
           </div>
@@ -101,14 +123,12 @@ export function DetailHero({
             </div>
           )}
 
-          <div className="mt-4 lg:mt-5 w-full">
-            <p className="text-sm lg:text-base text-white/70 leading-relaxed line-clamp-2 text-center lg:text-left">
-              {detail.overview}
-            </p>
-          </div>
+          <OverviewText text={detail.overview} className="mt-4 lg:mt-5 w-full lg:max-w-[560px]" />
         </div>
 
-        <FactPanel detail={detail} />
+        <HeroPanelSlot>
+          <FactPanel detail={detail} />
+        </HeroPanelSlot>
       </div>
     </div>
   )
@@ -163,7 +183,7 @@ function FactPanel({ detail }: { detail: MediaDetail }) {
   return (
     <div className="w-full lg:w-[280px] lg:shrink-0 mt-2 lg:mt-0 lg:mb-2">
       {rows.length > 0 && (
-        <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] overflow-hidden backdrop-blur-sm">
+        <div className="rounded-xl bg-[#141416] border border-[#202023] overflow-hidden">
           <div className="divide-y divide-white/[0.06]">
             {rows.map((row) => (
               <div key={row.label} className="flex items-center justify-between px-4 py-2.5">
@@ -181,13 +201,19 @@ function FactPanel({ detail }: { detail: MediaDetail }) {
             if (!src) return null
             return (
               <div key={c.id} className="flex items-center justify-center h-10 px-2">
-                <img
-                  loading="lazy"
-                  src={src}
-                  alt={c.name}
-                  title={c.name}
-                  className="w-auto max-h-7 object-contain brightness-0 invert opacity-50 max-w-full"
-                />
+                {/* `fill` needs a sized box, and the logo's aspect ratio is not
+                    part of the API response, so the box carries the constraint
+                    and `object-contain` letterboxes whatever TMDB sends. */}
+                <div className="relative w-full h-7">
+                  <Image
+                    fill
+                    sizes="(max-width: 1024px) 45vw, 300px"
+                    src={src}
+                    alt={c.name}
+                    title={c.name}
+                    className="object-contain brightness-0 invert opacity-50"
+                  />
+                </div>
               </div>
             )
           })}

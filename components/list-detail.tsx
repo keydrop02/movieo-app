@@ -41,7 +41,7 @@ export function ListDetail({ id }: { id: string }) {
   if (!list) {
     return (
       <div className="relative z-10 min-h-screen pt-32 px-4 max-w-6xl mx-auto">
-        <div className="glass-panel flex flex-col items-center text-center px-6 py-16">
+        <div className="surface-panel flex flex-col items-center text-center px-6 py-16">
           <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center mb-5">
             <ListIcon className="w-8 h-8 text-white" />
           </div>
@@ -120,7 +120,7 @@ export function ListDetail({ id }: { id: string }) {
       </div>
 
       {list.items.length === 0 ? (
-        <div className="glass-panel flex flex-col items-center text-center px-6 py-16 mt-2">
+        <div className="surface-panel flex flex-col items-center text-center px-6 py-16 mt-2">
           <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center mb-5">
             <ListIcon className="w-8 h-8 text-white" />
           </div>
@@ -134,7 +134,10 @@ export function ListDetail({ id }: { id: string }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-x-4 gap-y-6">
-          {list.items.map((it) => (
+          {/* Items are stored oldest-first so import/export keeps a stable
+              order, but the most recently added title is the one someone just
+              acted on, so the grid shows newest first. */}
+          {[...list.items].reverse().map((it) => (
             <div key={`${it.kind}:${it.id}`} className="relative group/item">
 <MediaCard item={it} fill />
               <button

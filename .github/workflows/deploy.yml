@@ -23,6 +23,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Previously the workflow went straight from `npm ci` to a deploy, so a
+      # type error, a lint regression, or a broken build was only discovered by
+      # pushing to production. These gates make the push fail locally instead.
+      #
+      # Order matters: lint runs first because it needs no build artifacts, then
+      # the build, then the standalone typecheck. `tsc --noEmit` reads the
+      # generated route validators under `.next/types`, which only exist after a
+      # build and are rewritten by `vinext build`, so running it first would
+      # report errors from whatever the last local build left behind.
+      - name: Lint
+        run: npx eslint . --max-warnings 0
+
+      - name: Build
+        run: npx next build
+        env:
+          TMDB_API_KEYS: ${{ secrets.TMDB_API_KEYS }}
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Deploy to Cloudflare Workers
         run: npm run deploy:vinext
         env:
@@ -35,3 +55,24 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # `deploy` publishes the version before the secret is written, so the first
+      # deploy after this step is added runs without TMDB credentials and every
+      # API route returns 500. Check `/api/health` against the live URL and fail
+      # the job if the secret did not land.
+      - name: Smoke test /api/health
+        run: |
+          url="https://${{ vars.DEPLOY_HOST || 'movieo.pages.dev' }}"
+          echo "Checking $url/api/health"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/health.json -w '%{http_code}' "$url/api/health" || true)
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $code, retrying in 10s"
+            sleep 10
+          done
+          echo "::error::health check failed after 5 attempts (last HTTP $code)"
+          cat /tmp/health.json || true
+          exit 1

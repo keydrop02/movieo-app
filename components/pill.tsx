@@ -10,7 +10,7 @@ const BASE =
 const VARIANT: Record<PillVariant, string> = {
   primary: "theme-btn-primary hover:scale-105 shadow-xl shadow-black/10",
   secondary:
-    "theme-btn-secondary backdrop-blur-[20px] backdrop-saturate-150 border border-white/10 hover:border-white/20 shadow-lg shadow-black/5",
+    "theme-btn-secondary hover:border-white/20 shadow-lg shadow-black/5",
 }
 
 const SIZE: Record<PillSize, string> = {

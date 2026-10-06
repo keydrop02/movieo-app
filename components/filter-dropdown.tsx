@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import { Check, ChevronDown } from "lucide-react"
 import { img } from "@/lib/tmdb/images"
 import { cx } from "@/lib/utils"
@@ -52,7 +53,7 @@ export function FilterDropdown<T extends string | number>({
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex items-center justify-center sm:justify-between gap-1 h-10 px-3 sm:px-4 bg-white/10 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-white/20 transition-all text-sm shrink-0 whitespace-nowrap cursor-pointer min-w-0"
+        className="flex items-center justify-center sm:justify-between gap-1 h-10 px-3 sm:px-4 bg-[#232326] border border-[#2c2c2f] rounded-full text-white hover:bg-[#2c2c2f] transition-all text-sm shrink-0 whitespace-nowrap cursor-pointer min-w-0"
       >
         {label && (
           <span className="flex items-center gap-2 text-white/50 font-medium hidden sm:inline">
@@ -63,12 +64,12 @@ export function FilterDropdown<T extends string | number>({
         <span className="font-medium">
           {current && current.logoPath ? (
             <span className="flex items-center gap-1.5">
-              <img src={img(current.logoPath, "w154") ?? undefined} alt="" className={cx("w-4 h-4 rounded-full object-cover bg-white/10")} />
+              <Image src={img(current.logoPath, "w154") ?? ""} width={16} height={16} alt="" className={cx("w-4 h-4 rounded-full object-cover bg-white/10")} />
               {current.label}
             </span>
           ) : current?.logoUrl ? (
             <span className="flex items-center gap-1.5">
-              <img src={current.logoUrl} alt="" className="w-4 h-4 rounded-full object-cover bg-white/10" />
+              <Image src={current.logoUrl} width={16} height={16} alt="" className="w-4 h-4 rounded-full object-cover bg-white/10" />
               {current.label}
             </span>
           ) : (
@@ -79,7 +80,7 @@ export function FilterDropdown<T extends string | number>({
       </button>
 
       {open && (
-        <div className="absolute top-full mt-2 w-full min-w-[180px] max-w-[calc(100vw-1.5rem)] bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 left-0 animate-dropdown-in">
+        <div className="absolute top-full mt-2 w-full min-w-[180px] max-w-[calc(100vw-1.5rem)] surface-nav-drop rounded-xl shadow-2xl overflow-hidden z-50 left-0 animate-dropdown-in">
           <div className="max-h-[300px] overflow-y-auto custom-scrollbar py-1">
             {options.map((opt) => {
               const isSel = opt.value === selected
@@ -101,12 +102,12 @@ export function FilterDropdown<T extends string | number>({
                   <div className="flex items-center gap-3 min-w-0">
                     {opt.logoPath ? (
                       <>
-                        <img src={img(opt.logoPath, "w154") ?? undefined} alt="" className="w-6 h-6 rounded-full object-cover bg-white/10 shrink-0" />
+                        <Image src={img(opt.logoPath, "w154") ?? ""} width={24} height={24} alt="" className="w-6 h-6 rounded-full object-cover bg-white/10 shrink-0" />
                         <span className="truncate">{opt.label}</span>
                       </>
                     ) : opt.logoUrl ? (
                       <>
-                        <img src={opt.logoUrl} alt="" className="w-6 h-6 rounded-full object-cover bg-white/10 shrink-0" />
+                        <Image src={opt.logoUrl} width={24} height={24} alt="" className="w-6 h-6 rounded-full object-cover bg-white/10 shrink-0" />
                         <span className="truncate">{opt.label}</span>
                       </>
                     ) : (

@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { Play } from "lucide-react"
 import { mediaUrl, year, rateColor } from "@/lib/utils"
@@ -38,20 +39,23 @@ export function MediaCard({
       )}
     >
       <div className="aspect-[2/3] rounded-xl overflow-hidden bg-white/5 shadow-xl shadow-black/40 relative isolate">
-        <img
-          className="block w-full h-full object-cover transition-all duration-300 lg:group-hover/card:brightness-50"
-          loading="lazy"
-          src={src ?? undefined}
-          alt={item.title}
-        />
+        {src && (
+          <Image
+            fill
+            sizes="(max-width: 1024px) 140px, 200px"
+            className="block object-cover transition-all duration-300 lg:group-hover/card:brightness-50"
+            src={src}
+            alt={item.title}
+          />
+        )}
         {rating && (
-          <span className="absolute top-2 left-2 lg:hidden px-2 py-0.5 flex items-center gap-1 text-[10px] font-semibold rounded-full bg-black/60 border border-white/20 text-white backdrop-blur-md z-10">
+          <span className="absolute top-2 left-2 lg:hidden px-2 py-0.5 flex items-center gap-1 text-[10px] font-semibold rounded-full bg-black/75 border border-white/15 text-white z-10">
             <RateStar color={rateColor(item.vote_average)} className="w-2.5 h-2.5" />
             {rating}
           </span>
         )}
         {badge?.text && (
-          <span className="absolute top-2 right-2 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-black/60 border border-white/20 text-white backdrop-blur-md z-10">
+          <span className="absolute top-2 right-2 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-black/75 border border-white/15 text-white z-10">
             {badge.text}
           </span>
         )}
@@ -104,12 +108,15 @@ export function SpotlightCard({
       className="flex-none snap-start w-[70vw] max-w-[280px] sm:w-[264px] sm:max-w-none lg:w-[316px] group/card cursor-pointer origin-center transition-transform duration-500 ease-out hover:scale-105 hover:z-50"
     >
       <div className="aspect-video rounded-xl overflow-hidden bg-white/5 shadow-xl shadow-black/40 relative isolate">
-        <img
-          loading="lazy"
-          className="block w-full h-full object-cover transition-all duration-300 lg:group-hover/card:brightness-50"
-          src={src ?? undefined}
-          alt={item.title}
-        />
+        {src && (
+          <Image
+            fill
+            sizes="(max-width: 640px) 70vw, (max-width: 1024px) 264px, 316px"
+            className="block object-cover transition-all duration-300 lg:group-hover/card:brightness-50"
+            src={src}
+            alt={item.title}
+          />
+        )}
         <div className="card-hover-veil absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-500 pointer-events-none opacity-0 lg:group-hover/card:opacity-100" />
         <div className="hidden lg:flex absolute inset-0 flex-col items-center justify-center px-4 pointer-events-none transition-all duration-300 transform opacity-0 translate-y-4 group-hover/card:opacity-100 group-hover/card:translate-y-0">
           <div className="text-center w-full space-y-1">
@@ -131,8 +138,15 @@ export function SpotlightCard({
 export function ProviderTile({ id, name, logoPath }: { id: number; name: string; logoPath: string }) {
   return (
     <Link href={`/provider/${id}`} className="group/tile flex-none flex flex-col items-center gap-2 w-[76px] lg:w-[92px]">
-      <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 shadow-lg transition-all duration-300 group-hover/tile:scale-105 group-hover/tile:ring-white/30">
-        <img className="w-full h-full object-cover" loading="lazy" src={img(logoPath, "w154") ?? undefined} alt={name} draggable={false} />
+      <div className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 shadow-lg transition-all duration-300 group-hover/tile:scale-105 group-hover/tile:ring-white/30">
+        <Image
+          fill
+          sizes="(max-width: 1024px) 64px, 80px"
+          className="object-cover"
+          src={img(logoPath, "w154") ?? ""}
+          alt={name}
+          draggable={false}
+        />
       </div>
       <span className="text-[11px] lg:text-xs font-medium text-white/55 group-hover/tile:text-white text-center leading-tight line-clamp-2 transition-colors duration-300">
         {name}

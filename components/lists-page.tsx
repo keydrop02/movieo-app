@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { AlertTriangle, Check, ChevronRight, Dices, Folder, List as ListIcon, Pencil, Plus, X } from "lucide-react"
 import { MediaCard } from "@/components/media-card"
 import { pillClass } from "@/components/pill"
 import { cx } from "@/lib/utils"
+import { useDialog } from "@/lib/use-dialog"
 import {
   createList,
   deleteList,
@@ -34,6 +35,13 @@ export function ListsPage() {
   const [error, setError] = useState("")
   const [confirming, setConfirming] = useState<StoredList | null>(null)
   const confirmRef = useRef<HTMLDivElement>(null)
+  const closeConfirm = useCallback(() => setConfirming(null), [])
+  const dialogRef = useDialog<HTMLDivElement>(confirming !== null, closeConfirm)
+
+  const sortedLists = useMemo(
+    () => [...lists].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
+    [lists],
+  )
 
   useEffect(() => {
     return subscribe(() => setLists(readLists()))
@@ -44,14 +52,9 @@ export function ListsPage() {
     const onClick = (e: MouseEvent) => {
       if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) setConfirming(null)
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirming(null)
-    }
     document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
     return () => {
       document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
     }
   }, [confirming])
 
@@ -184,7 +187,7 @@ export function ListsPage() {
           </div>
         )}
 
-        {lists.map((list) => (
+        {sortedLists.map((list) => (
           <div
             key={list.id}
             className={cx("rounded-2xl bg-white/[0.05] border border-white/10", expanded[list.id] && "border-white/15")}
@@ -287,7 +290,7 @@ export function ListsPage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-x-4 gap-y-6 pt-3">
-                    {list.items.map((it) => (
+                    {[...list.items].reverse().map((it) => (
                       <div
                         key={`${it.kind}:${it.id}`}
                         className={cx("relative group/item", managing === list.id && "animate-shake")}
@@ -323,13 +326,13 @@ export function ListsPage() {
       {confirming &&
         createPortal(
           <div className="fixed inset-0 z-[160]">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/70" />
             <div
-              ref={confirmRef}
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-label="Delete list"
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm surface-dropdown rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
             >
               <div className="flex items-start justify-between gap-3 px-5 pt-5">
                 <div className="flex items-center gap-2.5">

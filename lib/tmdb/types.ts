@@ -2,6 +2,8 @@ export type MediaKind = "movie" | "tv"
 
 export type ProviderType = "flatrate" | "rent" | "buy" | "free"
 
+export type TrendingWindow = "day" | "week"
+
 export interface MediaItem {
   id: number
   kind: MediaKind

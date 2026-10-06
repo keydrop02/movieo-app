@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Play } from "lucide-react"
 import { getProgress, timeAgo, type HistoryEntry, type Progress } from "@/lib/watch-store"
 import { img } from "@/lib/tmdb/images"
@@ -14,6 +15,14 @@ export function watchHref(entry: HistoryEntry, p?: Progress): string {
   const s = p?.season && p.season > 0 ? p.season : entry.season ?? 1
   const ep = p?.episode && p.episode > 0 ? p.episode : entry.episode ?? 1
   return `/watch/tv/${entry.id}/${s}/${ep}`
+}
+
+function timeLeft(seconds: number): string {
+  const totalMins = Math.max(0, Math.round(seconds / 60))
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
 }
 
 export function WatchHistoryCard({
@@ -40,11 +49,12 @@ export function WatchHistoryCard({
       >
         <div className="relative aspect-video overflow-hidden">
           {back ? (
-            <img
+            <Image
+              fill
+              sizes="(max-width: 1024px) 50vw, 400px"
               src={back}
               alt={entry.title}
-              loading="lazy"
-              className="w-full h-full object-cover transition-all duration-300 group-hover/card:brightness-50"
+              className="object-cover transition-all duration-300 group-hover/card:brightness-50"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -67,17 +77,22 @@ export function WatchHistoryCard({
               )}
             </p>
           </div>
+          <span className="absolute top-2 left-2 z-10 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-medium text-white/90 leading-none backdrop-blur-sm">
+            Watched {timeAgo(entry.lastWatchedAt)}{timeAgo(entry.lastWatchedAt) === "just now" ? "" : " ago"}
+          </span>
           {p && p.percent > 0 && p.percent < 90 && (
             <div className="absolute bottom-0 inset-x-0 px-2.5 py-1.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-              <span className="block text-right text-[10px] font-semibold tabular-nums leading-none text-[var(--theme-progress-accent)]">
-                {Math.round(p.percent)}%
+              <span className="block text-right text-[10px] font-semibold tabular-nums leading-none text-[var(--accent)]">
+                {entry.type === "tv"
+                  ? `S${p.season ?? entry.season ?? 1} E${p.episode ?? entry.episode ?? 1} • ${timeLeft(p.duration - p.currentTime)} left`
+                  : `${timeLeft(p.duration - p.currentTime)} left`}
               </span>
               <div className="mt-0.5 h-1 rounded-full bg-white/20 overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{
-                    backgroundColor: "var(--theme-progress-accent)",
-                    boxShadow: "0 0 8px color-mix(in srgb, var(--theme-progress-accent) 80%, transparent)",
+                    backgroundColor: "var(--accent)",
+                    boxShadow: "0 0 8px color-mix(in srgb, var(--accent) 80%, transparent)",
                     width: `${Math.min(p.percent, 100)}%`,
                   }}
                 />
@@ -87,7 +102,6 @@ export function WatchHistoryCard({
         </div>
       </Link>
       <p className="mt-1.5 text-[11px] font-medium text-white/80 truncate lg:hidden">{entry.title}</p>
-      <p className="mt-0.5 text-[10px] text-white/60">Watched {timeAgo(entry.lastWatchedAt)}{timeAgo(entry.lastWatchedAt) === "just now" ? "" : " ago"}</p>
       {onRemove && (
         <button
           aria-label={`Remove ${entry.title}`}

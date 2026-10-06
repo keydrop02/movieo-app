@@ -1,42 +1,16 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Play, Volume2, VolumeX, Info, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react"
 import type { MediaItem, Video } from "@/lib/tmdb/types"
 import { mediaUrl, rateColor } from "@/lib/utils"
+import { loadYtApi } from "@/lib/youtube"
 import Link from "next/link"
 
 interface ShortItem extends MediaItem {
   trailer?: Video | null
-}
-
-declare global {
-  interface Window {
-    YT: {
-      Player: new (div: HTMLElement, opts: Record<string, unknown>) => {
-        mute: () => void
-        unMute: () => void
-        destroy: () => void
-        onError?: (e: { data?: number }) => void
-      }
-    }
-    onYouTubeIframeAPIReady: () => void
-  }
-}
-
-let ytApiPromise: Promise<void> | null = null
-function loadYtApi() {
-  if (ytApiPromise) return ytApiPromise
-  ytApiPromise = new Promise<void>((resolve) => {
-    if (typeof window === "undefined") return resolve()
-    if (window.YT?.Player) return resolve()
-    const tag = document.createElement("script")
-    tag.src = "https://www.youtube.com/iframe_api"
-    document.head.appendChild(tag)
-    window.onYouTubeIframeAPIReady = () => resolve()
-  })
-  return ytApiPromise
 }
 
 export function ShortsFeed({ items }: { items: MediaItem[] }) {
@@ -105,7 +79,7 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
     <div className="relative h-dvh overflow-hidden bg-black">
       <button
         onClick={() => router.back()}
-        className="absolute top-4 left-4 z-30 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer"
+        className="absolute top-4 left-4 z-30 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer"
       >
         <ArrowLeft className="w-5 h-5" />
       </button>
@@ -114,14 +88,14 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
         <button
           onClick={() => scrollTo(Math.max(0, activeIdx - 1))}
           disabled={activeIdx === 0}
-          className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+          className="w-9 h-9 rounded-full bg-black/55 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
         >
           <ChevronUp className="w-5 h-5" />
         </button>
         <button
           onClick={() => scrollTo(Math.min(enriched.length - 1, activeIdx + 1))}
           disabled={activeIdx === enriched.length - 1}
-          className="w-9 h-9 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+          className="w-9 h-9 rounded-full bg-black/55 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
         >
           <ChevronDown className="w-5 h-5" />
         </button>
@@ -159,7 +133,8 @@ function ShortCard({
   const containerRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<InstanceType<typeof window.YT.Player> | null>(null)
   const readyRef = useRef(false)
-  const playing = active && !!item.trailer
+  const trailerKey = item.trailer?.key ?? null
+  const playing = active && !!trailerKey
   const backdrop = item.backdrop_path
     ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
     : item.poster_path
@@ -170,13 +145,14 @@ function ShortCard({
   useEffect(() => { mutedRef.current = muted })
 
   useEffect(() => {
-    if (!playing || !containerRef.current || playerRef.current) return
+    if (!playing || !trailerKey || !containerRef.current || playerRef.current) return
     const divId = `yt-${item.id}`
 
-    loadYtApi().then(() => {
-      if (playerRef.current || !containerRef.current) return
-      const wrapper = containerRef.current
-      if (!wrapper) return
+    loadYtApi()
+      .then(() => {
+        if (playerRef.current || !containerRef.current) return
+        const wrapper = containerRef.current
+        if (!wrapper) return
 
       const div = document.createElement("div")
       div.id = divId
@@ -184,7 +160,7 @@ function ShortCard({
       wrapper.prepend(div)
 
       playerRef.current = new window.YT.Player(div, {
-        videoId: item.trailer!.key,
+        videoId: trailerKey,
         playerVars: {
           autoplay: 1,
           mute: 1,
@@ -193,7 +169,7 @@ function ShortCard({
           modestbranding: 1,
           playsinline: 1,
           loop: 1,
-          playlist: item.trailer!.key,
+          playlist: trailerKey,
           iv_load_policy: 3,
           fs: 0,
           origin: window.location.origin,
@@ -207,6 +183,8 @@ function ShortCard({
           },
         },
       })
+    }).catch(() => {
+      playerRef.current = null
     })
 
     return () => {
@@ -218,7 +196,7 @@ function ShortCard({
       const el = document.getElementById(divId)
       if (el) el.remove()
     }
-  }, [playing, item.id, item.trailer?.key])
+  }, [playing, item.id, trailerKey])
 
   useEffect(() => {
     if (!readyRef.current || !playerRef.current) return
@@ -234,10 +212,12 @@ function ShortCard({
       <div className="w-full h-full sm:w-auto sm:h-auto sm:flex sm:items-center sm:justify-center sm:gap-4">
         <div ref={containerRef} className="relative w-full h-full sm:w-[min(100vw,420px)] sm:h-[min(100dvh,780px)] sm:rounded-2xl overflow-hidden bg-neutral-900 sm:shadow-2xl sm:shadow-black/60">
           {!playing && backdrop && (
-            <img
+            <Image
+              fill
+              sizes="(max-width: 640px) 100vw, 420px"
               src={backdrop}
               alt={item.title}
-              className="absolute inset-0 w-full h-full object-cover"
+              className="object-cover"
             />
           )}
 
@@ -263,7 +243,7 @@ function ShortCard({
           {!playing && item.trailer !== undefined && !item.trailer && (
             <div className="absolute inset-0 flex items-center justify-center z-20">
               <div className="flex flex-col items-center gap-2">
-                <span className="bg-white/10 backdrop-blur-md rounded-full p-4">
+                <span className="bg-black/55 rounded-full p-4">
                   <Play className="w-6 h-6 text-white fill-current" />
                 </span>
                 <span className="text-white/40 text-xs">No trailer</span>
@@ -280,19 +260,19 @@ function ShortCard({
 
         <div className="hidden sm:flex flex-col items-center gap-5">
           <Link href={`/watch/${item.kind}/${item.id}`} className="flex flex-col items-center gap-1 cursor-pointer">
-            <span className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
+            <span className="w-11 h-11 rounded-full bg-black/55 flex items-center justify-center hover:bg-black/75 transition-colors">
               <Play className="w-5 h-5 text-white fill-current" />
             </span>
             <span className="text-white/60 text-[10px] font-medium">Play</span>
           </Link>
           <Link href={mediaUrl(item)} className="flex flex-col items-center gap-1 cursor-pointer">
-            <span className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
+            <span className="w-11 h-11 rounded-full bg-black/55 flex items-center justify-center hover:bg-black/75 transition-colors">
               <Info className="w-5 h-5 text-white" />
             </span>
             <span className="text-white/60 text-[10px] font-medium">Info</span>
           </Link>
           <button onClick={onToggleMute} className="flex flex-col items-center gap-1 cursor-pointer">
-            <span className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
+            <span className="w-11 h-11 rounded-full bg-black/55 flex items-center justify-center hover:bg-black/75 transition-colors">
               {muted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
             </span>
             <span className="text-white/60 text-[10px] font-medium">{muted ? "Unmute" : "Mute"}</span>
@@ -302,19 +282,19 @@ function ShortCard({
 
       <div className="absolute right-3 bottom-24 z-20 flex flex-col items-center gap-5 sm:hidden">
         <Link href={`/watch/${item.kind}/${item.id}`} className="flex flex-col items-center gap-1 cursor-pointer">
-          <span className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
+          <span className="w-11 h-11 rounded-full bg-black/55 flex items-center justify-center hover:bg-black/75 transition-colors">
             <Play className="w-5 h-5 text-white fill-current" />
           </span>
           <span className="text-white/60 text-[10px] font-medium">Play</span>
         </Link>
         <Link href={mediaUrl(item)} className="flex flex-col items-center gap-1 cursor-pointer">
-          <span className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
+          <span className="w-11 h-11 rounded-full bg-black/55 flex items-center justify-center hover:bg-black/75 transition-colors">
             <Info className="w-5 h-5 text-white" />
           </span>
           <span className="text-white/60 text-[10px] font-medium">Info</span>
         </Link>
         <button onClick={onToggleMute} className="flex flex-col items-center gap-1 cursor-pointer">
-          <span className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
+          <span className="w-11 h-11 rounded-full bg-black/55 flex items-center justify-center hover:bg-black/75 transition-colors">
             {muted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
           </span>
           <span className="text-white/60 text-[10px] font-medium">{muted ? "Unmute" : "Mute"}</span>
