@@ -62,7 +62,7 @@ jobs:
       # the job if the secret did not land.
       - name: Smoke test /api/health
         run: |
-          url="https://${{ vars.DEPLOY_HOST || 'movieo.pages.dev' }}"
+          url="https://${{ vars.DEPLOY_HOST || 'movieo.keydeal9.workers.dev' }}"
           echo "Checking $url/api/health"
           for attempt in 1 2 3 4 5; do
             code=$(curl -s -o /tmp/health.json -w '%{http_code}' "$url/api/health" || true)
