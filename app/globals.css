@@ -253,7 +253,7 @@ html.route-watch footer {
 .bottom-nav-row {
   position: fixed;
   left: 50%;
-  bottom: 4px;
+  bottom: 16px;
   transform: translateX(-50%);
 
   width: calc(100vw - 24px);
@@ -387,7 +387,7 @@ html.route-watch footer {
 
 @media (min-width: 641px) {
   .bottom-nav-row {
-    bottom: 4px;
+    bottom: 16px;
   }
 
   .bottom-nav {
@@ -407,7 +407,7 @@ html.route-watch footer {
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .bottom-nav-row {
-    bottom: max(4px, env(safe-area-inset-bottom));
+    bottom: max(16px, env(safe-area-inset-bottom));
   }
 }
 .nav-divider {

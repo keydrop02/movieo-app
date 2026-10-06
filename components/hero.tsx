@@ -35,7 +35,7 @@ export function HeroCarousel({
 
   return (
     <div
-      className="relative h-[85vh] w-full group"
+      className="relative h-[68vh] lg:h-[85vh] w-full group"
       tabIndex={0}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -69,7 +69,7 @@ export function HeroCarousel({
         <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      <div className="absolute inset-0 flex items-end px-6 lg:pl-16 z-20 pb-20 lg:pb-0">
+      <div className="absolute inset-0 flex items-end px-6 lg:pl-16 z-20 pb-8 lg:pb-0">
         <div className="w-full max-w-2xl gap-4 lg:gap-6 flex flex-col items-center lg:items-start text-center lg:text-left mx-auto lg:mx-0">
           <div className="gap-4 lg:gap-6 flex flex-col items-center lg:items-start w-full">
             <div className="relative group cursor-pointer">
@@ -114,7 +114,7 @@ export function HeroCarousel({
         </div>
       </div>
 
-      <div className="absolute bottom-6 right-6 hidden lg:flex gap-2 z-30 items-center">
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-6 lg:bottom-6 flex gap-2 z-30 items-center">
         {items.map((item, i) => (
           <button
             key={item.id}

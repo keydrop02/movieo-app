@@ -108,9 +108,9 @@ export function ContinueWatching() {
       <div className="px-6 lg:px-16">
         <RowHeader title="Continue Watching" href="/watch-history" />
       </div>
-      <ScrollRail mask className="pt-2 px-6 lg:px-16 gap-4 lg:min-h-[216px]">
+      <ScrollRail mask className="pt-2 px-6 lg:px-16 gap-4 lg:min-h-[260px]">
         {cards.map((card) => (
-          <div key={`${card.entry.type}-${card.entry.id}`} className="flex-none w-[240px] sm:w-[280px] lg:w-[340px]">
+          <div key={`${card.entry.type}-${card.entry.id}`} className="flex-none w-[280px] sm:w-[320px] lg:w-[400px]">
             <WatchHistoryCard entry={card.entry} progress={card.progress} onRemove={() => remove(card)} />
           </div>
         ))}
