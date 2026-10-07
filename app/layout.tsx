@@ -23,13 +23,10 @@ export const metadata: Metadata = {
   description: site.description,
   manifest: "/manifest.json",
   icons: {
-    icon: [
-      { url: "/icons/icon-96.png", sizes: "96x96", type: "image/png" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-    ],
+    icon: [{ url: "/movieo-logo.png", sizes: "1254x1254", type: "image/png" }],
     // iOS does not read the manifest; without this link a home-screen install
     // falls back to a screenshot of the page.
-    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/movieo-logo.png", sizes: "1254x1254", type: "image/png" }],
   },
   applicationName: site.name,
   openGraph: {
@@ -47,7 +44,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#95FF50",
+  themeColor: "#0b0b0d",
   width: "device-width",
   initialScale: 1,
 }

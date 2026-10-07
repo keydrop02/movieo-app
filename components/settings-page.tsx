@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   AlertTriangle,
@@ -27,6 +27,7 @@ import { clearAllServerPrefs, clearServerOrder, readServerOrder, writeServerOrde
 import { clearRecentSearches } from "@/lib/search-history"
 import { clearEpisodeTimings } from "@/lib/episode-timing"
 import { useDialog } from "@/lib/use-dialog"
+import { getInstallState, promptInstall, subscribeInstall, type InstallState } from "@/lib/install-prompt"
 
 const PROVIDERS = getProviders()
 const DEFAULT_ORDER = PROVIDERS.map((p) => p.id)
@@ -95,37 +96,13 @@ export function SettingsPage() {
   const closeConfirm = useCallback(() => setConfirming(null), [])
   const dialogRef = useDialog<HTMLDivElement>(confirming !== null, closeConfirm)
 
-  interface BeforeInstallPromptEvent extends Event {
-    prompt: () => Promise<void>
-    userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
-  }
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [installed, setInstalled] = useState(false)
+  const [installState, setInstallState] = useState<InstallState>(() => getInstallState())
+  const { available: canInstall, installed } = installState
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const onPrompt = (e: Event) => {
-      e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
-    }
-    const onInstalled = () => setInstalled(true)
-    window.addEventListener("beforeinstallprompt", onPrompt)
-    window.addEventListener("appinstalled", onInstalled)
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt)
-      window.removeEventListener("appinstalled", onInstalled)
-    }
-  }, [])
+  useEffect(() => subscribeInstall(() => setInstallState(getInstallState())), [])
 
-  const requestInstall = async () => {
-    const evt = deferredPrompt
-    if (!evt) return
-    try {
-      await evt.prompt()
-      const choice = await evt.userChoice
-      if (choice.outcome === "accepted") setInstalled(true)
-      setDeferredPrompt(null)
-    } catch {}
+  const requestInstall = () => {
+    void promptInstall()
   }
 
   /**
@@ -154,6 +131,8 @@ export function SettingsPage() {
     active: boolean
   } | null>(null)
   const holdTimerRef = useRef<number | null>(null)
+  const rowRefs = useRef<Map<string, HTMLLIElement>>(new Map())
+  const prevRowTops = useRef<Map<string, number>>(new Map())
 
   const clearHold = () => {
     if (holdTimerRef.current !== null) {
@@ -161,6 +140,44 @@ export function SettingsPage() {
       holdTimerRef.current = null
     }
   }
+
+  /**
+   * FLIP animation for the server list. After a drag reorder the rows are laid
+   * out in their new positions instantly; this reads each row's `offsetTop`
+   * (layout position, so the drag scale does not skew it), snaps it back to its
+   * previous offset with a transform, then releases it so it glides into place.
+   * The row under the pointer is skipped so it tracks the cursor without lag.
+   */
+  useLayoutEffect(() => {
+    const nextTops = new Map<string, number>()
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+    rowRefs.current.forEach((el, id) => {
+      const top = el.offsetTop
+      nextTops.set(id, top)
+      const prev = prevRowTops.current.get(id)
+      if (prev === undefined || id === dragId || reduceMotion) return
+      const dy = prev - top
+      if (Math.abs(dy) < 1) return
+      el.animate(
+        [{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
+        { duration: 220, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+      )
+    })
+    prevRowTops.current = nextTops
+  })
+
+  // Touch drags only work if the browser doesn't claim the gesture for
+  // panning. Once a long-press activates a drag we swallow `touchmove`; a
+  // non-passive native listener is required because `touch-action` can only be
+  // honoured at gesture start and React's listener cannot cancel the scroll.
+  useEffect(() => {
+    const onTouchMove = (e: TouchEvent) => {
+      const drag = dragStateRef.current
+      if (drag?.active && drag.pointerType === "touch") e.preventDefault()
+    }
+    document.addEventListener("touchmove", onTouchMove, { passive: false })
+    return () => document.removeEventListener("touchmove", onTouchMove)
+  }, [])
 
   useEffect(() => {
     if (historySuccess === null) return
@@ -522,6 +539,10 @@ export function SettingsPage() {
               return (
                 <li
                   key={id}
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(id, el)
+                    else rowRefs.current.delete(id)
+                  }}
                   data-provider-id={id}
                   onPointerDown={(e) => startDrag(e, id)}
                   onPointerMove={moveDrag}
@@ -531,7 +552,7 @@ export function SettingsPage() {
                   className={cx(
                     "relative flex items-center gap-3 h-12 px-3 rounded-xl surface-dropdown surface-nav-drop border transition-[transform,border-color,background-color,box-shadow] duration-150 will-change-transform cursor-grab active:cursor-grabbing select-none",
                     isDragging
-                      ? "scale-[1.05] bg-white/10 border-white/40 shadow-[0_10px_30px_rgba(0,0,0,0.45)] z-10"
+                      ? "touch-none scale-[1.05] bg-white/10 border-white/40 shadow-[0_10px_30px_rgba(0,0,0,0.45)] z-10"
                       : isOver
                         ? "border-white/45 bg-white/[0.06] scale-[1.02]"
                         : "border-white/10",
@@ -573,10 +594,10 @@ export function SettingsPage() {
                 </svg>
                 {site.name} is installed.
               </div>
-            ) : deferredPrompt ? (
+            ) : canInstall ? (
               <button
                 onClick={requestInstall}
-                className={cx(BTN_PILL, "bg-white text-black border-transparent hover:bg-white/90")}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-white text-black border border-transparent hover:bg-white/90 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 Install
@@ -584,14 +605,14 @@ export function SettingsPage() {
             ) : (
               <button
                 disabled
-                className={cx(BTN_PILL, "bg-white/10 text-white/30 cursor-not-allowed hover:bg-white/10")}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-white text-black/40 border border-transparent text-xs font-semibold transition-colors cursor-not-allowed"
               >
                 <Download className="w-3.5 h-3.5" />
                 Install
               </button>
             )}
             <p className="text-[13px] text-white/40 leading-snug">
-              {deferredPrompt
+              {canInstall
                 ? "Add Movieo to your device for an app-like experience with instant access and full-screen viewing."
                 : "Use your browser's menu to install the app. On iPhone or iPad, use the Share button, then \u201cAdd to Home Screen.\u201d"}
             </p>
