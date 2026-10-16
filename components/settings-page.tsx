@@ -1,9 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { createPortal } from "react-dom"
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import {
-  AlertTriangle,
   Archive,
   Download,
   GripVertical,
@@ -15,22 +13,31 @@ import {
   ShieldCheck,
   Star,
   Upload,
-  X,
 } from "lucide-react"
 import { cx } from "@/lib/utils"
 import { site } from "@/lib/site"
 import { applyPrefs, DEFAULT_PREFS, readPrefs, writePrefs, type Prefs } from "@/lib/prefs"
 import { clearAllPurges, clearHistory, clearProgress, getHistory, parseHistoryImport, setHistory } from "@/lib/watch-store"
-import { parseListImport, readLists, serializeListFile, writeLists, itemKey } from "@/lib/lists"
+import { parseListImport, readLists, serializeListFile, subscribe as subscribeLists, writeLists, itemKey } from "@/lib/lists"
 import { getProviders } from "@/lib/tmdb/embeds"
 import { clearAllServerPrefs, clearServerOrder, readServerOrder, writeServerOrder } from "@/lib/server-prefs"
 import { clearRecentSearches } from "@/lib/search-history"
 import { clearEpisodeTimings } from "@/lib/episode-timing"
-import { useDialog } from "@/lib/use-dialog"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { TrashCan } from "@/components/trash-can"
+import { useStoredValue } from "@/lib/use-local-store"
 import { getInstallState, promptInstall, subscribeInstall, type InstallState } from "@/lib/install-prompt"
+import type { HistoryEntry } from "@/lib/watch-store"
+import type { StoredList } from "@/lib/lists"
 
 const PROVIDERS = getProviders()
 const DEFAULT_ORDER = PROVIDERS.map((p) => p.id)
+
+const EMPTY_ORDER: string[] = []
+const EMPTY_HISTORY: HistoryEntry[] = []
+const EMPTY_LISTS: StoredList[] = []
+const DEFAULT_INSTALL: InstallState = { available: false, installed: false }
+const getServerInstall = () => DEFAULT_INSTALL
 
 type ConfirmTarget = "history" | "lists" | "storage" | null
 
@@ -83,23 +90,21 @@ function Toggle({ on, onChange, label, desc }: { on: boolean; onChange: (v: bool
 }
 
 export function SettingsPage() {
-  const [prefs, setPrefs] = useState<Prefs>(() => readPrefs())
+  const [prefs, invalidatePrefs] = useStoredValue(readPrefs, DEFAULT_PREFS)
+  const [history, invalidateHistory] = useStoredValue(getHistory, EMPTY_HISTORY)
+  const [lists] = useStoredValue(readLists, EMPTY_LISTS, subscribeLists)
+  const [order, invalidateOrder] = useStoredValue(readServerOrder, EMPTY_ORDER)
   const [confirming, setConfirming] = useState<ConfirmTarget>(null)
-  const [historyCount, setHistoryCount] = useState(() => getHistory().length)
-  const [order, setOrder] = useState<string[]>(() => readServerOrder())
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
-  const [listCount, setListCount] = useState(() => readLists().length)
   const [historySuccess, setHistorySuccess] = useState<number | null>(null)
   const [listSuccess, setListSuccess] = useState<number | null>(null)
-  const confirmRef = useRef<HTMLDivElement>(null)
-  const closeConfirm = useCallback(() => setConfirming(null), [])
-  const dialogRef = useDialog<HTMLDivElement>(confirming !== null, closeConfirm)
 
-  const [installState, setInstallState] = useState<InstallState>(() => getInstallState())
+  const historyCount = history.length
+  const listCount = lists.length
+
+  const installState = useSyncExternalStore(subscribeInstall, getInstallState, getServerInstall)
   const { available: canInstall, installed } = installState
-
-  useEffect(() => subscribeInstall(() => setInstallState(getInstallState())), [])
 
   const requestInstall = () => {
     void promptInstall()
@@ -201,40 +206,19 @@ export function SettingsPage() {
   const apply = (next: Prefs) => {
     writePrefs(next)
     applyPrefs(next)
-    setPrefs(next)
+    invalidatePrefs()
   }
-
-  useEffect(() => {
-    const refresh = () => {
-      setHistoryCount(getHistory().length)
-      setListCount(readLists().length)
-    }
-    window.addEventListener("storage", refresh)
-    return () => window.removeEventListener("storage", refresh)
-  }, [])
-
-  useEffect(() => {
-    if (!confirming) return
-    const onDown = (e: MouseEvent) => {
-      if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) setConfirming(null)
-    }
-    document.addEventListener("mousedown", onDown)
-    return () => {
-      document.removeEventListener("mousedown", onDown)
-    }
-  }, [confirming])
 
   const clearWatchHistory = () => {
     clearHistory()
     clearProgress()
     clearAllPurges()
-    setHistoryCount(0)
+    invalidateHistory()
     setConfirming(null)
   }
 
   const clearAllLists = () => {
     writeLists([])
-    setListCount(0)
     setConfirming(null)
   }
 
@@ -275,7 +259,7 @@ export function SettingsPage() {
             }
           }
           setHistory(merged)
-          setHistoryCount(merged.length)
+          invalidateHistory()
           setHistorySuccess(added)
         } else {
           window.alert("Invalid history file. Please use a file exported from Movieo.")
@@ -327,7 +311,6 @@ export function SettingsPage() {
           }
           const merged = [...map.values()]
           writeLists(merged)
-          setListCount(merged.length)
           setListSuccess(added)
         } else {
           window.alert("Invalid list file. Please use a file exported from Movieo.")
@@ -342,8 +325,8 @@ export function SettingsPage() {
     clearServerOrder()
     clearAllServerPrefs()
     applyPrefs(DEFAULT_PREFS)
-    setPrefs(DEFAULT_PREFS)
-    setOrder([])
+    invalidatePrefs()
+    invalidateOrder()
     setConfirming(null)
   }
 
@@ -355,8 +338,8 @@ export function SettingsPage() {
     const next = list.slice()
     const [moved] = next.splice(from, 1)
     next.splice(to, 0, moved)
-    setOrder(next)
     writeServerOrder(next)
+    invalidateOrder()
   }
 
   const startDrag = (e: React.PointerEvent<HTMLLIElement>, id: string) => {
@@ -419,8 +402,8 @@ export function SettingsPage() {
   }
 
   const resetServerOrder = () => {
-    setOrder([])
     clearServerOrder()
+    invalidateOrder()
   }
 
   const confirmTitle =
@@ -670,7 +653,7 @@ export function SettingsPage() {
                       : "bg-red-500/15 text-red-400 hover:bg-red-500/25",
                   )}
                 >
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true"><path fillRule="evenodd" clipRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z"></path></svg>
+                    <TrashCan className="w-3.5 h-3.5" />
                   Clear all
                 </button>
               </div>
@@ -719,7 +702,7 @@ export function SettingsPage() {
                       : "bg-red-500/15 text-red-400 hover:bg-red-500/25",
                   )}
                 >
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true"><path fillRule="evenodd" clipRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z"></path></svg>
+                    <TrashCan className="w-3.5 h-3.5" />
                   Clear all
                 </button>
               </div>
@@ -755,51 +738,14 @@ export function SettingsPage() {
         </section>
       </div>
 
-      {confirming &&
-        createPortal(
-          <div className="fixed inset-0 z-[160]">
-            <div className="absolute inset-0 bg-black/70" />
-            <div
-              ref={dialogRef}
-              role="dialog"
-              aria-modal="true"
-              aria-label={confirmTitle}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm surface-dropdown rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
-            >
-              <div className="flex items-start justify-between gap-3 px-5 pt-5">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-red-500/15 text-red-400 shrink-0">
-                    <AlertTriangle className="w-4.5 h-4.5" />
-                  </span>
-                  <h3 className="text-sm font-semibold text-white/90">{confirmTitle}</h3>
-                </div>
-                <button
-                  onClick={() => setConfirming(null)}
-                  aria-label="Cancel"
-                  className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="px-5 pt-3 text-sm text-white/50 leading-relaxed">{confirmBody}</p>
-              <div className="flex items-center gap-2.5 px-5 pt-5 pb-5">
-                <button
-                  onClick={() => setConfirming(null)}
-                  className="flex-1 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmAction}
-                  className="flex-1 h-10 rounded-xl bg-[#e50914] hover:bg-[#f6121d] text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  {confirmLabel}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirmTitle}
+        body={confirmBody}
+        confirmLabel={confirmLabel}
+        onConfirm={confirmAction}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   )
 }

@@ -44,7 +44,7 @@ const securityHeaders = [
       // goes through our own origin (/api/*), so a compromised embed cannot
       // direct the browser at a new destination.
       "media-src 'self' https://www.youtube.com https://*.googlevideo.com",
-      "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://cinesrc.st https://vidfast.pro https://vidlove.cc https://xpass.top https://vidup.to https://*.cinesrc.st https://*.vidfast.pro https://*.vidlove.cc https://*.xpass.top https://*.vidup.to",
+      "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://cinesrc.st https://vidfast.vc https://vidlove.cc https://xpass.top https://vidup.to https://*.cinesrc.st https://*.vidfast.vc https://*.vidlove.cc https://*.xpass.top https://*.vidup.to",
       [
         "connect-src 'self' https://www.youtube.com https://*.googlevideo.com",
         sentryEnabled && SENTRY_INGEST,

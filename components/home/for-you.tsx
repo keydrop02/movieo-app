@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { MediaCard } from "@/components/media-card"
 import { ScrollRail } from "@/components/scroll-rail"
+import { reportError } from "@/lib/error-reporting"
 import { getHistory, type HistoryEntry } from "@/lib/watch-store"
 import { readPrefs } from "@/lib/prefs"
+import { useDismiss } from "@/lib/use-dismiss"
 import { cx } from "@/lib/utils"
 import type { MediaItem } from "@/lib/tmdb/types"
 
@@ -36,10 +38,11 @@ export function ForYou() {
       targets.map(async (h) => {
         try {
           const res = await fetch(`/api/detail/${h.type}/${h.id}`)
-          if (!res.ok) return []
+          if (!res.ok) throw new Error(`detail ${res.status}`)
           const data = (await res.json()) as { similar?: MediaItem[] }
           return data.similar ?? []
-        } catch {
+        } catch (err) {
+          reportError("for-you.load-similar", err, "warn")
           return []
         }
       }),
@@ -67,21 +70,7 @@ export function ForYou() {
     loadFor("")
   }, [loadFor])
 
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
-    return () => {
-      document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [open])
+  useDismiss(open, () => setOpen(false), { rootRef: menuRef })
 
   if (!readPrefs().showForYou) return null
   if (items.length === 0) return null

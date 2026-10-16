@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import Image from "next/image"
 import { Check, ChevronDown } from "lucide-react"
 import { img } from "@/lib/tmdb/images"
 import { cx } from "@/lib/utils"
+import { useDismiss } from "@/lib/use-dismiss"
 
 export type DropOption<T extends string | number> = {
   value: T
@@ -30,21 +31,7 @@ export function FilterDropdown<T extends string | number>({
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
-    }
-    document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
-    return () => {
-      document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [open])
+  useDismiss(open, () => setOpen(false), { rootRef })
 
   const current = options.find((o) => o.value === selected)
 

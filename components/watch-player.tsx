@@ -6,10 +6,14 @@ import Link from "next/link"
 import { ArrowLeft, Server } from "lucide-react"
 import type { Season } from "@/lib/tmdb/types"
 import { getEmbedSources, type EmbedSource } from "@/lib/tmdb/embeds"
+import { img } from "@/lib/tmdb/images"
 import { addHistory, clearProgressPurge, getAllProgress, getProgress, isProgressPurged, updateProgress } from "@/lib/watch-store"
 import { orderSources, clearServerPref, readServerPref, writeServerPref } from "@/lib/server-prefs"
 import { getEpisodeIntro } from "@/lib/episode-timing"
+import { fetchEpisodes } from "@/lib/episodes-client"
+import { reportError } from "@/lib/error-reporting"
 import { readPrefs } from "@/lib/prefs"
+import { useDismiss } from "@/lib/use-dismiss"
 import { cx } from "@/lib/utils"
 
 interface EpisodeBrief {
@@ -150,8 +154,14 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
   const [menuOpen, setMenuOpen] = useState(false)
   const [episodesOpen, setEpisodesOpen] = useState(false)
   const [episodeData, setEpisodeData] = useState<Record<number, EpisodeBrief[]>>({})
+  const [episodeErrors, setEpisodeErrors] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
   const [seasonMenuOpen, setSeasonMenuOpen] = useState(false)
+
+  const sourceMenuRef = useRef<HTMLDivElement>(null)
+  const seasonMenuRef = useRef<HTMLDivElement>(null)
+  useDismiss(menuOpen, () => setMenuOpen(false), { rootRef: sourceMenuRef })
+  useDismiss(seasonMenuOpen, () => setSeasonMenuOpen(false), { rootRef: seasonMenuRef })
 
   useEffect(() => {
     if (!source) return
@@ -240,9 +250,17 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
     if (!source || loadedSrcRef.current === source.url) return
     loadedSrcRef.current = source.url
     if (startAt > 2) {
-      if (source.id === "vidlove") {
+      // Target the embed's own origin rather than "*" so the resume timestamp
+      // cannot be broadcast to any other document that ends up in the frame.
+      let origin: string | undefined
+      try {
+        origin = new URL(source.url).origin
+      } catch {
+        origin = undefined
+      }
+      if (source.id === "vidlove" && origin) {
         try {
-          frameRef.current?.contentWindow?.postMessage({ type: "SET_TIME", time: startAt }, "*")
+          frameRef.current?.contentWindow?.postMessage({ type: "SET_TIME", time: startAt }, origin)
         } catch {
           /* ignore */
         }
@@ -274,17 +292,19 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
   }, [kind])
 
   const pendingFetch = useRef<Set<number>>(new Set())
-  const fetchEpisodes = useCallback(
+  const fetchSeason = useCallback(
     async (seas: number) => {
       if (pendingFetch.current.has(seas)) return
       pendingFetch.current.add(seas)
       try {
-        const res = await fetch(`/api/episodes/${id}/${seas}`)
-        const data = await res.json()
-        const eps: EpisodeBrief[] = Array.isArray(data.episodes) ? data.episodes : []
+        const eps = await fetchEpisodes(id, seas)
         setEpisodeData((prev) => (prev[seas] ? prev : { ...prev, [seas]: eps }))
-      } catch {
+      } catch (err) {
+        reportError("watch.player.load-episodes", err, "warn")
+        // Record the failure distinctly from an empty season so the panel can
+        // tell the user the request failed instead of “nothing available”.
         setEpisodeData((prev) => (prev[seas] ? prev : { ...prev, [seas]: [] }))
+        setEpisodeErrors((prev) => (prev.has(seas) ? prev : new Set(prev).add(seas)))
       } finally {
         pendingFetch.current.delete(seas)
       }
@@ -294,10 +314,10 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
 
   useEffect(() => {
     if (kind === "tv" && !episodeData[currentSeason]) {
-      const timer = setTimeout(() => fetchEpisodes(currentSeason), 0)
+      const timer = setTimeout(() => fetchSeason(currentSeason), 0)
       return () => clearTimeout(timer)
     }
-  }, [kind, currentSeason, episodeData, fetchEpisodes])
+  }, [kind, currentSeason, episodeData, fetchSeason])
 
   const currentSeasonEpisodes = episodeData[currentSeason] ?? null
 
@@ -341,9 +361,11 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
       const win = frameRef.current?.contentWindow
       if (!win || !source) return
       try {
-        if (source.id === "vidlove") win.postMessage({ type: "SET_TIME", time }, "*")
-        else if (source.id === "xpass")
+        if (source.id === "vidlove") {
+          win.postMessage({ type: "SET_TIME", time }, new URL(source.url).origin)
+        } else if (source.id === "xpass") {
           win.postMessage({ type: "player.action", action: "playAt", position: time }, "https://play.xpass.top")
+        }
       } catch {
         /* ignore */
       }
@@ -504,7 +526,7 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
         )}
         <div className="ml-auto flex items-center gap-2">
           {/* source dropdown */}
-          <div className="relative">
+          <div ref={sourceMenuRef} className="relative">
             <button
               onClick={() => setMenuOpen((v) => !v)}
               aria-haspopup="menu"
@@ -599,7 +621,7 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
             )}
           </div>
 
-          <div className="relative px-4 pt-3">
+          <div ref={seasonMenuRef} className="relative px-4 pt-3">
             <button
               onClick={() => setSeasonMenuOpen((v) => !v)}
               aria-haspopup="menu"
@@ -641,6 +663,8 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
               <div className="flex justify-center py-10">
                 <div className="w-7 h-7 rounded-full border-2 border-white/20 border-t-white animate-spin" />
               </div>
+            ) : episodeErrors.has(currentSeason) ? (
+              <p className="text-white/40 text-xs py-6 text-center">Couldn&apos;t load episodes. Please try again.</p>
             ) : currentSeasonEpisodes.length === 0 ? (
               <p className="text-white/40 text-xs py-6 text-center">No episodes available for this season yet.</p>
             ) : (
@@ -668,7 +692,7 @@ const [bust] = useState(() => (isProgressPurged(id, kind) ? `_fresh=${Math.rando
                         <Image
                           fill
                           sizes="96px"
-                          src={`https://image.tmdb.org/t/p/w300${ep.still_path}`}
+                          src={img(ep.still_path, "w300") ?? ""}
                           alt=""
                           aria-hidden={shielded || undefined}
                           className={cx("object-cover", shielded && "blur-[6px]")}

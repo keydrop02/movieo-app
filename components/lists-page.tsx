@@ -1,13 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { createPortal } from "react-dom"
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Check, ChevronRight, Dices, Folder, List as ListIcon, Pencil, Plus, X } from "lucide-react"
+import { Check, ChevronRight, Dices, Folder, List as ListIcon, Pencil, Plus } from "lucide-react"
 import { MediaCard } from "@/components/media-card"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { TrashCan } from "@/components/trash-can"
 import { pillClass } from "@/components/pill"
 import { cx } from "@/lib/utils"
-import { useDialog } from "@/lib/use-dialog"
+import { useStoredValue } from "@/lib/use-local-store"
 import {
   createList,
   deleteList,
@@ -18,6 +19,8 @@ import {
   type StoredList,
 } from "@/lib/lists"
 
+const EMPTY_LISTS: StoredList[] = []
+
 const ADJ = ["Midnight", "Neon", "Epic", "Cozy", "Dark", "Golden", "Retro", "Sunday", "Rainy", "Classic"]
 const NOUNS = ["Marathon", "Bangers", "Vault", "Night", "Hits", "Picks", "Stash", "Reels", "Collection", "Favorites"]
 
@@ -26,7 +29,7 @@ function randomName(): string {
 }
 
 export function ListsPage() {
-  const [lists, setLists] = useState<StoredList[]>(() => readLists())
+  const [lists] = useStoredValue(readLists, EMPTY_LISTS, subscribe)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [managing, setManaging] = useState<string | null>(null)
   const [draftName, setDraftName] = useState("")
@@ -34,29 +37,11 @@ export function ListsPage() {
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
   const [confirming, setConfirming] = useState<StoredList | null>(null)
-  const confirmRef = useRef<HTMLDivElement>(null)
-  const closeConfirm = useCallback(() => setConfirming(null), [])
-  const dialogRef = useDialog<HTMLDivElement>(confirming !== null, closeConfirm)
 
   const sortedLists = useMemo(
     () => [...lists].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
     [lists],
   )
-
-  useEffect(() => {
-    return subscribe(() => setLists(readLists()))
-  }, [])
-
-  useEffect(() => {
-    if (!confirming) return
-    const onClick = (e: MouseEvent) => {
-      if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) setConfirming(null)
-    }
-    document.addEventListener("mousedown", onClick)
-    return () => {
-      document.removeEventListener("mousedown", onClick)
-    }
-  }, [confirming])
 
   const toggle = (id: string) => {
     if (managing === id) return
@@ -246,7 +231,7 @@ export function ListsPage() {
                     onClick={() => setConfirming(list)}
                     className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-[13px] font-bold text-[#e50914] border border-[#e50914]/50 hover:bg-[#e50914]/15 transition-colors"
                   >
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true"><path fillRule="evenodd" clipRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z"></path></svg>
+                    <TrashCan className="w-4 h-4" />
                     Delete List
                   </button>
                   <button
@@ -305,13 +290,7 @@ export function ListsPage() {
                             managing === list.id ? "opacity-100" : "opacity-0",
                           )}
                         >
-                          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
-                            <path
-                              fillRule="evenodd"
-                              clipRule="evenodd"
-                              d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z"
-                            />
-                          </svg>
+                          <TrashCan />
                         </button>
                       </div>
                     ))}
@@ -323,54 +302,21 @@ export function ListsPage() {
         ))}
       </div>
 
-      {confirming &&
-        createPortal(
-          <div className="fixed inset-0 z-[160]">
-            <div className="absolute inset-0 bg-black/70" />
-            <div
-              ref={dialogRef}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Delete list"
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-sm surface-dropdown rounded-2xl shadow-2xl overflow-hidden animate-dropdown-in"
-            >
-              <div className="flex items-start justify-between gap-3 px-5 pt-5">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-red-500/15 text-red-400 shrink-0">
-                    <AlertTriangle className="w-4.5 h-4.5" />
-                  </span>
-                  <h3 className="text-sm font-semibold text-white/90">Delete list?</h3>
-                </div>
-                <button
-                  onClick={() => setConfirming(null)}
-                  aria-label="Cancel"
-                  className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="px-5 pt-3 text-sm text-white/50 leading-relaxed">
-                This will permanently remove &quot;{confirming.name}&quot; and its {confirming.items.length}{" "}
-                {confirming.items.length === 1 ? "item" : "items"}. This can&apos;t be undone.
-              </p>
-              <div className="flex items-center gap-2.5 px-5 pt-5 pb-5">
-                <button
-                  onClick={() => setConfirming(null)}
-                  className="flex-1 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => onDelete(confirming)}
-                  className="flex-1 h-10 rounded-xl bg-[#e50914] hover:bg-[#f6121d] text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <ConfirmDialog
+        open={confirming !== null}
+        title="Delete list?"
+        body={
+          confirming ? (
+            <>
+              This will permanently remove &quot;{confirming.name}&quot; and its {confirming.items.length}{" "}
+              {confirming.items.length === 1 ? "item" : "items"}. This can&apos;t be undone.
+            </>
+          ) : null
+        }
+        confirmLabel="Delete"
+        onConfirm={() => confirming && onDelete(confirming)}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   )
 }

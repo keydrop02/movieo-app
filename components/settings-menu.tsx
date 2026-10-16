@@ -1,9 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { Flame, History, Settings } from "lucide-react"
 import { cx } from "@/lib/utils"
+import { useDismiss } from "@/lib/use-dismiss"
 
 const MENU_ITEMS = [
   { label: "Settings", href: "/settings", Icon: Settings },
@@ -32,23 +33,10 @@ export function SettingsMenu({
     })
   }, [open, anchorRef])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    const onClick = (e: MouseEvent) => {
-      const t = e.target as Node | null
-      if (t instanceof Element && t.closest("[data-profile-trigger]")) return
-      if (ref.current && !ref.current.contains(t)) onClose()
-    }
-    document.addEventListener("keydown", onKey)
-    document.addEventListener("mousedown", onClick)
-    return () => {
-      document.removeEventListener("keydown", onKey)
-      document.removeEventListener("mousedown", onClick)
-    }
-}, [open, onClose])
+  useDismiss(open, onClose, {
+    rootRef: ref,
+    ignore: (t) => t instanceof Element && !!t.closest("[data-profile-trigger]"),
+  })
 
   if (!open) return null
 

@@ -1,6 +1,13 @@
+import type { Metadata } from "next"
 import { ExploreGrid } from "@/components/explore-grid"
 import { discover, getGenres, getProvidersList } from "@/lib/tmdb/client"
 import { safeLoad } from "@/lib/tmdb/safe"
+
+export const metadata: Metadata = {
+  title: "TV Shows",
+  description: "Browse trending, top-rated and currently airing TV shows. Filter by genre, year and streaming provider.",
+  alternates: { canonical: "/series" },
+}
 
 export default async function SeriesPage() {
   const [genres, providers, disc] = await Promise.all([

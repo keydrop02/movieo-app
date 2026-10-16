@@ -7,8 +7,11 @@ import { Check, Plus, X } from "lucide-react"
 import type { MediaItem } from "@/lib/tmdb/types"
 import { addToList, createList, isInAnyList, isInList, readLists, subscribe, toggleInList, type StoredList } from "@/lib/lists"
 import { img } from "@/lib/tmdb/images"
+import { useStoredValue } from "@/lib/use-local-store"
 import { cx } from "@/lib/utils"
 import { useDialog } from "@/lib/use-dialog"
+
+const EMPTY_LISTS: StoredList[] = []
 
 export function AddToListPopover({
   label = "Add to list",
@@ -20,7 +23,7 @@ export function AddToListPopover({
   triggerClass?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [lists, setLists] = useState<StoredList[]>(() => readLists())
+  const [lists] = useStoredValue(readLists, EMPTY_LISTS, subscribe)
   const [creating, setCreating] = useState(false)
   const [pending, setPending] = useState("")
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -49,10 +52,6 @@ export function AddToListPopover({
     },
     [sheetRef],
   )
-
-  useEffect(() => {
-    return subscribe(() => setLists(readLists()))
-  }, [])
 
   // Escape closes the desktop dropdown too. `useDialog` only covers the mobile
   // sheet, and a dismissible popover that traps Escape is a keyboard trap.

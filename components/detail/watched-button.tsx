@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Eye, EyeOff } from "lucide-react"
+import { useStoredValue } from "@/lib/use-local-store"
 
 const KEY = "movieo:watched"
 const readWatched = (key: string): boolean => {
@@ -26,7 +27,8 @@ const writeWatched = (key: string, watched: boolean) => {
 
 export function WatchedButton({ id, kind }: { id: number; kind: "movie" | "tv" }) {
   const key = `${kind}-${id}`
-  const [watched, setWatched] = useState(() => readWatched(key))
+  const readWatchedKey = useCallback(() => readWatched(key), [key])
+  const [watched, invalidateWatched] = useStoredValue(readWatchedKey, false)
   const [pop, setPop] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -39,8 +41,8 @@ export function WatchedButton({ id, kind }: { id: number; kind: "movie" | "tv" }
 
   const toggle = () => {
     const next = !watched
-    setWatched(next)
     writeWatched(key, next)
+    invalidateWatched()
     setPop(true)
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setPop(false), 1500)

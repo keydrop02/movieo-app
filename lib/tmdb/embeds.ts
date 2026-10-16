@@ -30,10 +30,12 @@ const providers: EmbedProvider[] = [
     id: "vidfast",
     name: "VidFast",
     capabilities: { movie: true, tv: true },
+    // The .pro host 301-redirects here; framing .pro would be blocked because the
+    // redirect target (this host) is not in the frame-src policy. Link directly.
     movie: (id, _startAt, bust) =>
-      `https://vidfast.pro/movie/${id}?autoPlay=true&nextButton=false` + (bust ? `&${bust}` : ""),
+      `https://vidfast.vc/movie/${id}?autoPlay=true&nextButton=false` + (bust ? `&${bust}` : ""),
     tv: (id, s, e, _startAt, bust) =>
-      `https://vidfast.pro/tv/${id}/${s}/${e}?autoPlay=true&nextButton=false` + (bust ? `&${bust}` : ""),
+      `https://vidfast.vc/tv/${id}/${s}/${e}?autoPlay=true&nextButton=false` + (bust ? `&${bust}` : ""),
     kind: "vidfast",
   },
   {
@@ -83,8 +85,13 @@ export function getEmbedSources(ctx: {
   startAt?: number
   bust?: string
 }): EmbedSource[] {
-  if (ctx.type === "tv" && (ctx.season == null || ctx.episode == null)) return []
+  if (!Number.isInteger(ctx.tmdbId) || ctx.tmdbId <= 0) return []
+  if (ctx.type === "tv" && (!Number.isInteger(ctx.season) || !Number.isInteger(ctx.episode))) return []
   const startAt = ctx.startAt && ctx.startAt > 0 ? Math.floor(ctx.startAt) : undefined
+  // `bust` is only ever an internal cache-buster (`_fresh=...`); drop anything
+  // that could add a second query parameter or path segment if a future caller
+  // wires it to user input.
+  const bust = ctx.bust && /^[\w-]+=[\w.-]+$/.test(ctx.bust) ? ctx.bust : undefined
   return orderedProviders()
     .filter((p) => p.capabilities[ctx.type])
     .map((p) => ({
@@ -93,14 +100,11 @@ export function getEmbedSources(ctx: {
       kind: p.kind,
       url:
         ctx.type === "movie"
-          ? p.movie(String(ctx.tmdbId), startAt, ctx.bust)
-          : p.tv(String(ctx.tmdbId), ctx.season!, ctx.episode!, startAt, ctx.bust),
+          ? p.movie(String(ctx.tmdbId), startAt, bust)
+          : p.tv(String(ctx.tmdbId), ctx.season!, ctx.episode!, startAt, bust),
     }))
 }
 
 export function getProviders(): EmbedProvider[] {
-  return providers.slice().sort((a, b) => {
-    if (a.recommended !== b.recommended) return a.recommended ? -1 : 1
-    return a.name.localeCompare(b.name)
-  })
+  return orderedProviders()
 }

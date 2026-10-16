@@ -8,6 +8,7 @@ import { cx } from "@/lib/utils"
 import { reportError } from "@/lib/error-reporting"
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from "@/lib/search-history"
 import { readPrefs } from "@/lib/prefs"
+import { useDismiss } from "@/lib/use-dismiss"
 import type { MediaItem, TrendingWindow } from "@/lib/tmdb/types"
 
 const TREND_WINDOWS: Array<{ id: TrendingWindow; label: string }> = [
@@ -50,21 +51,7 @@ export function SearchView({ trending }: { trending: MediaItem[] }) {
   const [trendOpen, setTrendOpen] = useState(false)
   const trendRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!trendOpen) return
-    const onClick = (e: MouseEvent) => {
-      if (trendRef.current && !trendRef.current.contains(e.target as Node)) setTrendOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setTrendOpen(false)
-    }
-    document.addEventListener("mousedown", onClick)
-    document.addEventListener("keydown", onKey)
-    return () => {
-      document.removeEventListener("mousedown", onClick)
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [trendOpen])
+  useDismiss(trendOpen, () => setTrendOpen(false), { rootRef: trendRef })
 
   useEffect(() => {
     if (trendCache[timeWindow] !== undefined) return

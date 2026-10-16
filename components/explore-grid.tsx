@@ -6,6 +6,7 @@ import { RotateCcw } from "lucide-react"
 import { FilterDropdown, type DropOption } from "@/components/filter-dropdown"
 import { MediaCard, SpotlightCard } from "@/components/media-card"
 import { ScrollRail } from "@/components/scroll-rail"
+import { reportError } from "@/lib/error-reporting"
 import type { MediaItem } from "@/lib/tmdb/types"
 import { cx, mediaUrl } from "@/lib/utils"
 
@@ -52,8 +53,13 @@ export function ExploreGrid({
   const [error, setError] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const skipReset = useRef(false)
+  // Monotonic request id: a slow response for an older filter must not
+  // overwrite a newer one (filters and the infinite-scroll sentinel can
+  // interleave).
+  const requestId = useRef(0)
 
   const fetchPage = async (p: number, replace: boolean) => {
+    const id = ++requestId.current
     setLoading(true)
     try {
       const sp = new URLSearchParams({
@@ -66,19 +72,24 @@ export function ExploreGrid({
       if (country !== "all countries") sp.set("country", country)
       if (sort !== "popular") sp.set("sort", sort)
       const res = await fetch(`/api/discover?${sp}`)
+      if (!res.ok) throw new Error(`discover ${res.status}`)
       const data = await res.json()
+      if (id !== requestId.current) return
+      const nextItems: MediaItem[] = Array.isArray(data.items) ? data.items : []
       setItems((prev) => {
-        if (replace) return data.items
+        if (replace) return nextItems
         const seen = new Set(prev.map((x) => x.id))
-        return [...prev, ...data.items.filter((x: MediaItem) => !seen.has(x.id))]
+        return [...prev, ...nextItems.filter((x) => !seen.has(x.id))]
       })
       setTotalPages(data.totalPages ?? 1)
       setPage(p)
       setError(false)
-    } catch {
+    } catch (err) {
+      if (id !== requestId.current) return
       setError(true)
+      reportError("discover.load-page", err, "warn")
     } finally {
-      setLoading(false)
+      if (id === requestId.current) setLoading(false)
     }
   }
 
@@ -236,9 +247,9 @@ export function ExploreGrid({
                   <ScrollRail mask insetClass="-left-2" endInsetClass="-right-2" className="gap-3 sm:gap-4 pt-4 pb-0 sm:pb-12">
                     {spotlight.map((item) => (
                       <SpotlightCard
-                        key={item.id}
+                        key={`${item.kind}-${item.id}`}
                         item={item}
-                        badge={kind === "movie" ? "Coming Soon" : `Season ${item.vote_count ? "3" : "4"}`}
+                        badge={kind === "movie" ? "Coming Soon" : "New Season"}
                       />
                     ))}
                   </ScrollRail>
@@ -247,17 +258,30 @@ export function ExploreGrid({
             )}
 
             <div className="mt-4">
-              <div className={cx("grid grid-cols-1 grid-rows-1", error && "opacity-50")}>
+              <div className="grid grid-cols-1 grid-rows-1">
                 <div className="col-start-1 row-start-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-6 sm:gap-y-6">
                   {items.map((item, i) => (
-                    <div key={item.id} className="card-in" style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
+                    <div key={`${item.kind}-${item.id}`} className="card-in" style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
                       <MediaCard item={item} fill />
                     </div>
                   ))}
                 </div>
               </div>
+              {error && (
+                <div className="mt-8 flex flex-col items-center gap-3 text-center" role="alert">
+                  <p className="text-sm text-white/60">Couldn&apos;t load more titles.</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchPage(page, false)}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full text-white text-sm font-medium transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4 text-white/70" />
+                    Try again
+                  </button>
+                </div>
+              )}
               {loading && (
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12 pt-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-6 pt-8">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="animate-pulse aspect-[2/3] rounded-xl bg-white/[0.06]" />
                   ))}
@@ -296,11 +320,14 @@ function RandomButton({
       if (filters.country !== "all countries") sp.set("country", filters.country)
       if (filters.sort !== "popular") sp.set("sort", filters.sort)
       const res = await fetch(`/api/discover?${sp}`)
+      if (!res.ok) throw new Error(`discover ${res.status}`)
       const data = await res.json()
-      const items: MediaItem[] = data.items ?? []
+      const items: MediaItem[] = Array.isArray(data.items) ? data.items : []
       if (!items.length) return
       const item = items[Math.floor(Math.random() * items.length)]
       router.push(mediaUrl(item))
+    } catch (err) {
+      reportError("discover.surprise", err, "warn")
     } finally {
       setBusy(false)
     }

@@ -18,31 +18,12 @@ function release() {
   queue.shift()?.()
 }
 
-const CURATED_TO_ENDPOINT: Record<
-  string,
-  { kind: MediaKind; endpoint: string; sort: string | null; voteCutoff?: number }
-> = {
-  "oscar-best-picture": { kind: "movie", endpoint: "/movie/top_rated", sort: "vote_count.desc", voteCutoff: 1000 },
-  "award-winning-movies": { kind: "movie", endpoint: "/movie/top_rated", sort: "vote_average.desc", voteCutoff: 2000 },
-  "award-winning-shows": { kind: "tv", endpoint: "/tv/top_rated", sort: "vote_average.desc", voteCutoff: 300 },
-  "top-rated-movies": { kind: "movie", endpoint: "/movie/top_rated", sort: "vote_average.desc", voteCutoff: 1000 },
-  "top-rated-series": { kind: "tv", endpoint: "/tv/top_rated", sort: "vote_average.desc", voteCutoff: 500 },
-  "rotten-tomatoes-100": { kind: "movie", endpoint: "/movie/top_rated", sort: "vote_average.desc", voteCutoff: 1000 },
-  "based-on-true-story": { kind: "movie", endpoint: "/discover/movie", sort: "vote_average.desc", voteCutoff: 100 },
-  psychology: { kind: "movie", endpoint: "/discover/movie", sort: "popularity.desc", voteCutoff: 400 },
-  "mindfck": { kind: "movie", endpoint: "/discover/movie", sort: "popularity.desc", voteCutoff: 400 },
-  halloween: { kind: "movie", endpoint: "/discover/movie", sort: "popularity.desc", voteCutoff: 300 },
-  cannes: { kind: "movie", endpoint: "/movie/now_playing", sort: "vote_average.desc", voteCutoff: 100 },
-}
-
 export type MovieCategory = "now_playing" | "popular" | "top_rated" | "upcoming"
 export type TvCategory = "on_the_air" | "airing_today" | "popular" | "top_rated"
 
 let keyIndex = 0
-function nextKey(keys: string[]): string {
-  const key = keys[keyIndex % keys.length]
-  keyIndex++
-  return key
+function keyAt(i: number, keys: string[]): string {
+  return keys[i % keys.length]
 }
 
 async function tmdb<T>(path: string, params: Record<string, string | number | boolean> = {}, init?: RequestInit): Promise<T> {
@@ -50,24 +31,39 @@ async function tmdb<T>(path: string, params: Record<string, string | number | bo
   try {
     const { TMDB_API_KEYS } = getEnv()
     const url = new URL(BASE + path)
-    url.searchParams.set("api_key", nextKey(TMDB_API_KEYS))
     url.searchParams.set("language", "en-US")
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== "" && v !== null) url.searchParams.set(k, String(v))
     }
+    // Rotate the key per attempt rather than per request: if the chosen key is
+    // 429-limited, the retry lands on the next key instead of hammering the
+    // same dead one. The rotation offset is also advanced per request so load
+    // spreads across keys.
+    const base = keyIndex++
     let lastErr: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
+      url.searchParams.set("api_key", keyAt(base + attempt, TMDB_API_KEYS))
+      let res: Response
       try {
-        const res = await fetch(url, { next: { revalidate: 3600 }, ...init })
-        if (!res.ok) throw new Error(`TMDB ${path} failed: ${res.status}`)
-        return (await res.json()) as T
+        res = await fetch(url, { next: { revalidate: 3600 }, ...init })
       } catch (err) {
         lastErr = err
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * Math.pow(2, attempt)))
+        continue
+      }
+      if (res.ok) return (await res.json()) as T
+      // Retry only transient statuses: 5xx and 429. A 404/401/403 is permanent
+      // and retrying just burns latency (and the fetch cache) on every miss.
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error(`TMDB ${path} failed: ${res.status}`)
         if (attempt < 2) {
           const backoff = 400 * Math.pow(2, attempt)
-          await new Promise((r) => setTimeout(r, backoff))
+          const retryAfter = Number(res.headers.get("retry-after"))
+          await new Promise((r) => setTimeout(r, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoff))
         }
+        continue
       }
+      throw new Error(`TMDB ${path} failed: ${res.status}`)
     }
     throw lastErr
   } finally {
@@ -116,19 +112,6 @@ function mergeSimilar(raw: any, kind: MediaKind): MediaItem[] {
   }
   const seen = new Set<number>()
   return list({ results: (raw.similar?.results ?? []).filter((r: any) => pick(r, seen)) }, kind)
-}
-
-export async function getCurated(key: string, kind?: MediaKind): Promise<MediaItem[]> {
-  const cfg = CURATED_TO_ENDPOINT[key]
-  if (!cfg) throw new Error(`Unknown curated list key: ${key}`)
-  const useKind = kind ?? cfg.kind
-  const endpoint = useKind === "tv" ? (cfg.endpoint === "/movie/top_rated" ? "/tv/top_rated" : cfg.endpoint === "/movie/now_playing" ? "/tv/on_the_air" : cfg.endpoint) : cfg.endpoint
-
-  const raw = await tmdb<any>(endpoint, { page: 1 })
-  const items = list(raw, useKind)
-    .filter((i) => !cfg.voteCutoff || (i.vote_count ?? 0) >= cfg.voteCutoff)
-    .sort((a, b) => (cfg.sort === "vote_average.desc" ? b.vote_average - a.vote_average : b.popularity - a.popularity))
-  return items.slice(0, 20)
 }
 
 export async function getTrending(kind: MediaKind | "all", timeWindow: TrendingWindow = "week"): Promise<MediaItem[]> {
@@ -404,7 +387,9 @@ export async function discover(kind: MediaKind, params: DiscoverParams = {}): Pr
   }
   if (cc && kind === "tv") qp.with_origin_country = cc.origin
   if (cc && kind === "movie") qp.with_original_language = cc.lang
-  let sortBy = params.sort ? (SORT_MAP[params.sort] ?? params.sort) : "popularity.desc"
+  // Only accept whitelisted sort keys; forwarding arbitrary strings produced
+  // TMDB 422s (which then triggered pointless retry storms).
+  let sortBy = params.sort ? (SORT_MAP[params.sort] ?? "popularity.desc") : "popularity.desc"
   if (kind === "tv") sortBy = sortBy.replace("primary_release_date", "first_air_date")
   qp.sort_by = sortBy
   if (params.sort === "newest") {

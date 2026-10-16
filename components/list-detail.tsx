@@ -1,25 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Download, List as ListIcon, Pencil, Trash2 } from "lucide-react"
 import { MediaCard } from "@/components/media-card"
+import { TrashCan } from "@/components/trash-can"
 import { pillClass } from "@/components/pill"
 import { cx } from "@/lib/utils"
+import { useStoredValue } from "@/lib/use-local-store"
 import { deleteList, readLists, removeFromList, renameList, serializeListFile, subscribe, type StoredList } from "@/lib/lists"
 
-export function ListDetail({ id }: { id: string }) {
-  const [lists, setLists] = useState<StoredList[]>(() => readLists())
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(() => readLists().find((l) => l.id === id)?.name ?? "")
+const EMPTY_LISTS: StoredList[] = []
 
-  useEffect(() => {
-    return subscribe(() => {
-      const next = readLists()
-      setLists(next)
-      setName(next.find((l) => l.id === id)?.name ?? "")
-    })
-  }, [id])
+export function ListDetail({ id }: { id: string }) {
+  const [lists] = useStoredValue(readLists, EMPTY_LISTS, subscribe)
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState("")
 
   const list = lists.find((l) => l.id === id)
 
@@ -86,7 +82,10 @@ export function ListDetail({ id }: { id: string }) {
                 <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">{list.name}</h1>
                 <button
                   aria-label="Rename list"
-                  onClick={() => setEditing(true)}
+                  onClick={() => {
+                    setName(list.name)
+                    setEditing(true)
+                  }}
                   className="p-2 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-colors"
                 >
                   <Pencil className="w-4 h-4" />
@@ -146,13 +145,7 @@ export function ListDetail({ id }: { id: string }) {
                 onClick={() => removeFromList(list.id, it)}
                 className="absolute top-2 right-2 z-[999] w-[26px] h-[26px] rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all duration-200 hover:bg-[#e50914] hover:opacity-100"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
-                  <path
-                    fillRule="evenodd"
-                    clipRule="evenodd"
-                    d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z"
-                  />
-                </svg>
+                <TrashCan />
               </button>
             </div>
           ))}

@@ -1,16 +1,16 @@
 /**
  * Rate limiting.
  *
- * Two backends, picked at runtime:
+ * Two layers, both applied when available:
  *
- *  1. A Cloudflare Workers rate-limiting binding, when one is bound as
- *     `RATE_LIMITER`. This is the only backend that is actually correct on
- *     Workers, because module state is per-isolate: a cold isolate starts with
- *     an empty counter, and a warm one may be a different edge location than
- *     the last request.
- *  2. An in-process Map as a fallback for `next dev`, `next build`, and any
- *     runtime without the binding. It is per-instance and therefore only a
+ *  1. An in-process fixed-window counter that honors the caller's
+ *     `opts.max`/`opts.windowMs` per route key. Per-isolate, so it is a
  *     best-effort backstop, not a security boundary.
+ *  2. A Cloudflare Workers rate-limiting binding, when one is bound as
+ *     `RATE_LIMITER`. The binding is the only backend that survives isolate
+ *     recycling and edge-location changes, but its limit is a single global
+ *     budget shared by every route, so it is used as a coarse outer bound
+ *     while the per-route numbers come from layer 1.
  *
  * The in-process map is size-capped so that an attacker rotating keys cannot
  * grow it without bound.
@@ -48,7 +48,7 @@ function cleanup() {
 
 type WorkersRateLimiter = { limit: (opts: { key: string }) => Promise<{ success: boolean }> }
 
-let workersLimiter: WorkersRateLimiter | null | undefined
+let workersLimiter: WorkersRateLimiter | null = null
 
 /**
  * Resolve the Workers binding once. Wrangler exposes bindings on `env`, which
@@ -56,7 +56,7 @@ let workersLimiter: WorkersRateLimiter | null | undefined
  * probe the plausible locations rather than hard-coding one.
  */
 function getWorkersLimiter(): WorkersRateLimiter | null {
-  if (workersLimiter !== undefined) return workersLimiter
+  if (workersLimiter) return workersLimiter
 
   type MaybeEnv = { RATE_LIMITER?: unknown; env?: { RATE_LIMITER?: unknown }; __env?: { RATE_LIMITER?: unknown } }
 
@@ -75,27 +75,19 @@ function getWorkersLimiter(): WorkersRateLimiter | null {
     }
   }
 
-  workersLimiter = null
+  // Deliberately not caching the miss: bindings may be attached after the
+  // module first evaluates, and a cached `null` would lock throttling down to
+  // the in-process fallback for the isolate's whole lifetime. The probe is a
+  // handful of property reads, so re-running it per request is cheap.
   return null
 }
 
-export async function rateLimit(
-  key: string,
-  opts: { windowMs: number; max: number },
-): Promise<RateLimitResult> {
-  const limiter = getWorkersLimiter()
-  if (limiter) {
-    try {
-      const { success } = await limiter.limit({ key })
-      return { allowed: success, remaining: success ? opts.max - 1 : 0, limit: opts.max }
-    } catch {
-      // Binding rejected the call (not deployed, misconfigured, or a binding
-      // that is only available on some requests). Fall through to the
-      // in-process limiter so a failure here cannot silently disable all
-      // throttling.
-    }
-  }
-
+/**
+ * Fixed-window counter in module memory. Honors `opts` exactly; used both as
+ * the fallback when no binding exists and as the per-route enforcement layer
+ * on Workers (the binding alone has one global limit shared by every route).
+ */
+function localLimit(key: string, opts: { windowMs: number; max: number }): RateLimitResult {
   cleanup()
 
   const now = Date.now()
@@ -111,6 +103,35 @@ export async function rateLimit(
     return { allowed: false, remaining: 0, limit: opts.max }
   }
   return { allowed: true, remaining: opts.max - existing.count, limit: opts.max }
+}
+
+export async function rateLimit(
+  key: string,
+  opts: { windowMs: number; max: number },
+): Promise<RateLimitResult> {
+  // Per-route accounting always runs so `opts.max`/`opts.windowMs` are honoured
+  // even when the Workers binding is present. The binding's own limit is a
+  // single global budget (see wrangler.jsonc), so without this layer every
+  // route would silently share it and `/api/download`'s max of 10 would really
+  // be hundreds per minute.
+  const local = localLimit(key, opts)
+
+  const limiter = getWorkersLimiter()
+  if (limiter) {
+    try {
+      // Scope the binding key per route so routes also get separate buckets
+      // within the global budget.
+      const { success } = await limiter.limit({ key: `rl:${key}` })
+      if (!success) return { allowed: false, remaining: 0, limit: opts.max }
+    } catch {
+      // Binding rejected the call (not deployed, misconfigured, or a binding
+      // that is only available on some requests). The per-route in-process
+      // limit above has already been applied, so a failure here cannot
+      // silently disable all throttling.
+    }
+  }
+
+  return local
 }
 
 /**

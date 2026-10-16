@@ -13,6 +13,13 @@ function parseIntParam(raw: string | null, min: number, max: number): number | u
   return n
 }
 
+/** TMDB filter params are numeric ids/years; drop anything else before it reaches the API. */
+function parseIdParam(raw: string | null): string | undefined {
+  if (raw === null || raw === "") return undefined
+  if (!/^\d{1,9}$/.test(raw)) return undefined
+  return raw
+}
+
 export async function GET(req: Request) {
   const rl = await rateLimit(`discover:${clientIp(req)}`, { windowMs: 60_000, max: 120 })
   if (!rl.allowed) {
@@ -33,13 +40,15 @@ export async function GET(req: Request) {
 
   try {
     const result = await discover(kind, {
-      genre: sp.get("genre") ?? undefined,
-      year: sp.get("year") ?? undefined,
+      genre: parseIdParam(sp.get("genre")),
+      year: parseIdParam(sp.get("year")),
       voteMin: parseIntParam(sp.get("voteMin"), 0, 10),
       minVotes: parseIntParam(sp.get("minVotes"), 0, 100_000),
-      provider: sp.get("provider") ?? undefined,
+      provider: parseIdParam(sp.get("provider")),
       sort,
-      country: sp.get("country") ?? undefined,
+      // Country is a display name from our fixed list, not an id; cap the
+      // length so arbitrary strings never reach TMDB.
+      country: sp.get("country")?.slice(0, 64) || undefined,
       page: parseIntParam(sp.get("page"), 1, 500),
     })
     return NextResponse.json(

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { Check, ChevronDown, Copy, Download, X } from "lucide-react"
 import { cx } from "@/lib/utils"
 import { reportError } from "@/lib/error-reporting"
+import { fetchEpisodes } from "@/lib/episodes-client"
 import { useDialog } from "@/lib/use-dialog"
 
 interface DownloadLink {
@@ -64,22 +65,10 @@ export function DownloadModal({
   const [episodeOpen, setEpisodeOpen] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
   const busyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const close = useCallback(() => setOpen(false), [])
   const dialogRef = useDialog<HTMLDivElement>(open, close)
-
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", onClick)
-    return () => {
-      document.removeEventListener("mousedown", onClick)
-    }
-  }, [open])
 
   useEffect(() => () => {
     if (busyTimer.current) clearTimeout(busyTimer.current)
@@ -135,17 +124,16 @@ export function DownloadModal({
     if (item.kind === "tv") {
       setEpisode(1)
       setEpisodes([])
-      fetch(`/api/episodes/${item.id}/${firstSeason}`)
-        .then((r) => r.json())
-        .then((data) => {
-          const eps = (Array.isArray(data.episodes) ? data.episodes : []) as Array<{ episode_number: number }>
+      fetchEpisodes(item.id, firstSeason)
+        .then((eps) => {
           const nums = eps.map((e) => e.episode_number).filter((n) => n > 0)
           setEpisodes(nums)
           const firstEp = nums[0] || 1
           setEpisode(firstEp)
           loadLinks(firstSeason, firstEp)
         })
-        .catch(() => {
+        .catch((err) => {
+          reportError("downloads.load-episodes", err, "warn")
           setEpisodes([])
           loadLinks(firstSeason, 1)
         })
@@ -163,17 +151,16 @@ export function DownloadModal({
     setSeasonOpen(false)
     setEpisode(1)
     setEpisodes([])
-    fetch(`/api/episodes/${item.id}/${s}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const eps = (Array.isArray(data.episodes) ? data.episodes : []) as Array<{ episode_number: number }>
+    fetchEpisodes(item.id, s)
+      .then((eps) => {
         const nums = eps.map((e) => e.episode_number).filter((n) => n > 0)
         setEpisodes(nums)
         const firstEp = nums[0] || 1
         setEpisode(firstEp)
         loadLinks(s, firstEp)
       })
-      .catch(() => {
+      .catch((err) => {
+        reportError("downloads.load-episodes", err, "warn")
         setEpisodes([])
         loadLinks(s, 1)
       })
@@ -213,7 +200,7 @@ export function DownloadModal({
 
   const panel = (
     <div className="fixed inset-0 z-[160]">
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-black/70" onClick={close} />
       <div
         ref={dialogRef}
         role="dialog"
@@ -300,9 +287,9 @@ export function DownloadModal({
             <p className="text-xs text-white/45 py-6 text-center">{message}</p>
           ) : (
             <ul className="space-y-2">
-              {links.map((l, i) => (
+              {links.map((l) => (
                 <li
-                  key={i}
+                  key={l.url}
                   className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:border-white/[0.14] transition-colors"
                 >
                   <span className="flex-none w-16 text-center px-2 py-1 rounded-md text-[11px] font-bold bg-white/10 text-white/80 border border-white/10">

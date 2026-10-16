@@ -130,7 +130,7 @@ function TrailerCard({ video }: { video: Video }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 sm:p-8">
           <div
             className="absolute inset-0 bg-black/80"
             onClick={close}

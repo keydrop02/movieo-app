@@ -13,14 +13,25 @@ const KEY = "movieo:episode-timings"
 
 type TimingMap = Record<string, IntroSegment>
 
+function isSegment(value: unknown): value is IntroSegment {
+  if (!value || typeof value !== "object") return false
+  const s = value as Record<string, unknown>
+  return typeof s.start === "number" && typeof s.end === "number"
+}
+
+function isTimingMap(value: unknown): value is TimingMap {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  return Object.values(value as Record<string, unknown>).every(isSegment)
+}
+
 function read(): TimingMap {
   if (typeof window === "undefined") return {}
   try {
     const raw = window.localStorage.getItem(KEY)
     if (!raw) return {}
     const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object") return {}
-    return parsed as TimingMap
+    // Drop malformed ranges instead of handing callers a bad `start`/`end`.
+    return isTimingMap(parsed) ? parsed : {}
   } catch {
     return {}
   }

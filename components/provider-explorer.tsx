@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ProviderSegmented, GridWithFetch } from "@/components/grid-pages"
+import { reportError } from "@/lib/error-reporting"
 import type { MediaItem } from "@/lib/tmdb/types"
 
 export function ProviderExplorer({
@@ -24,11 +25,14 @@ export function ProviderExplorer({
     }
     try {
       const res = await fetch(`/api/discover?kind=tv&provider=${providerId}`)
+      if (!res.ok) throw new Error(`discover ${res.status}`)
       const data = await res.json()
-      setTv({ items: data.items ?? [], totalPages: data.totalPages ?? 1 })
+      setTv({ items: Array.isArray(data.items) ? data.items : [], totalPages: data.totalPages ?? 1 })
       setKind("tv")
-    } catch {
+    } catch (err) {
+      setTv({ items: [], totalPages: 1 })
       setKind("tv")
+      reportError("provider-explorer.load-tv", err, "warn")
     }
   }
 

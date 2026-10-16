@@ -16,11 +16,25 @@ export function itemKey(item: { id: number; kind: string }): string {
   return `${item.kind}:${item.id}`
 }
 
+function isStoredItem(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const it = value as Record<string, unknown>
+  return typeof it.id === "number" && (it.kind === "movie" || it.kind === "tv") && typeof it.title === "string"
+}
+
+function isStoredList(value: unknown): value is StoredList {
+  if (!value || typeof value !== "object") return false
+  const l = value as Record<string, unknown>
+  return typeof l.id === "string" && typeof l.name === "string" && Array.isArray(l.items) && l.items.every(isStoredItem)
+}
+
 function parseLists(raw: string | null): StoredList[] {
   if (!raw) return []
   const parsed: unknown = JSON.parse(raw)
   if (!Array.isArray(parsed)) return []
-  return parsed.filter((l): l is StoredList => !!l && typeof l === "object" && typeof (l as StoredList).id === "string")
+  // localStorage is user-editable; drop anything that isn't a well-formed list
+  // so a corrupted entry can't reach MediaCard as a half-typed item.
+  return parsed.filter(isStoredList)
 }
 
 export function readLists(): StoredList[] {
@@ -150,18 +164,8 @@ export function parseListImport(text: string): StoredList[] | null {
     const f = parsed as Partial<ListFile>
     if (typeof f.app !== "string" || !ACCEPTED_APPS.has(f.app)) return null
     if (f.type !== "lists" || f.version !== 1 || !Array.isArray(f.lists)) return null
-    if (
-      !f.lists.every(
-        (l) =>
-          l &&
-          typeof l.id === "string" &&
-          typeof l.name === "string" &&
-          Array.isArray(l.items) &&
-          l.items.every((it) => it && typeof it.id === "number" && (it.kind === "movie" || it.kind === "tv") && typeof it.title === "string"),
-      )
-    )
-      return null
-    return f.lists as StoredList[]
+    if (!f.lists.every(isStoredList)) return null
+    return f.lists
   } catch {
     return null
   }

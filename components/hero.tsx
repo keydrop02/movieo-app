@@ -8,6 +8,7 @@ import { img } from "@/lib/tmdb/images"
 import type { MediaItem } from "@/lib/tmdb/types"
 import { cx, mediaUrl, year, rateColor } from "@/lib/utils"
 import { AddToListPopover } from "@/components/add-to-list"
+import { pillClass } from "@/components/pill"
 import { RateStar } from "@/components/rate-star"
 
 export function HeroCarousel({
@@ -90,9 +91,10 @@ export function HeroCarousel({
           <div className="flex items-center justify-center lg:justify-start gap-3 w-full">
             <Link
               href={slide.kind === "movie" ? `/watch/movie/${slide.id}` : `/watch/tv/${slide.id}/1/1`}
-              className="inline-block"
+              className={pillClass("primary", "lg")}
             >
-              <PlayButton />
+              <Play className="w-5 h-5 mr-1.5 fill-current" />
+              <span>Play</span>
             </Link>
             <div className="hero-action-pill inline-flex items-center justify-center h-[52px] w-[52px] shrink-0 rounded-full bg-(--surface-elevated) border border-white/25 shadow-lg shadow-black/5">
               <AddToListPopover
@@ -178,15 +180,6 @@ export function HeroRating({ value }: { value: number }) {
         <span className="text-white/60 font-medium">/10</span>
       </span>
     </div>
-  )
-}
-
-function PlayButton() {
-  return (
-    <button className="relative rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed select-none h-[52px] theme-btn-primary hover:scale-105 shadow-xl shadow-black/10 px-6 text-lg font-bold min-w-[130px]">
-      <Play className="w-5 h-5 mr-1.5 fill-current" />
-      <span>Play</span>
-    </button>
   )
 }
 

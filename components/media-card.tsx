@@ -1,3 +1,6 @@
+"use client"
+
+import { memo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Play } from "lucide-react"
@@ -13,7 +16,7 @@ export type CardBadge = {
 }
 
 // Poster card used on browse grids + home rows + search results (matches /movies grid MediaCard)
-export function MediaCard({
+export const MediaCard = memo(function MediaCard({
   item,
   badge,
   wrapClass,
@@ -88,10 +91,10 @@ export function MediaCard({
       </div>
     </Link>
   )
-}
+})
 
 // Spotlight card: 16:9 wide card with hover overlay, used on /movies & /series pages
-export function SpotlightCard({
+export const SpotlightCard = memo(function SpotlightCard({
   item,
   badge,
   heroHref,
@@ -132,10 +135,10 @@ export function SpotlightCard({
       <p className="text-[10px] text-white/60">{year(item.release_date)}</p>
     </Link>
   )
-}
+})
 
 // Provider tile rail item
-export function ProviderTile({ id, name, logoPath }: { id: number; name: string; logoPath: string }) {
+export const ProviderTile = memo(function ProviderTile({ id, name, logoPath }: { id: number; name: string; logoPath: string }) {
   return (
     <Link href={`/provider/${id}`} className="group/tile flex-none flex flex-col items-center gap-2 w-[76px] lg:w-[92px]">
       <div className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 shadow-lg transition-all duration-300 group-hover/tile:scale-105 group-hover/tile:ring-white/30">
@@ -153,4 +156,4 @@ export function ProviderTile({ id, name, logoPath }: { id: number; name: string;
       </span>
     </Link>
   )
-}
+})

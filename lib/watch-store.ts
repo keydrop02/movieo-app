@@ -28,14 +28,52 @@ const PROGRESS_KEY = "movieo:progress"
 const PURGE_KEY = "movieo:purged"
 const MAX_HISTORY = 50
 
-function read<T>(key: string, fallback: T): T {
+function read<T>(key: string, fallback: T, validate: (value: unknown) => value is T): T {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return fallback
-    return JSON.parse(raw) as T
+    const parsed: unknown = JSON.parse(raw)
+    // localStorage is user-editable, so never trust the shape: a stale or
+    // hand-edited value must not reach callers as a half-typed object.
+    return validate(parsed) ? parsed : fallback
   } catch {
     return fallback
   }
+}
+
+function isHistoryEntry(value: unknown): value is HistoryEntry {
+  if (!value || typeof value !== "object") return false
+  const e = value as Record<string, unknown>
+  return (
+    typeof e.id === "number" &&
+    (e.type === "movie" || e.type === "tv") &&
+    typeof e.title === "string" &&
+    typeof e.lastWatchedAt === "string"
+  )
+}
+
+function isHistory(value: unknown): value is HistoryEntry[] {
+  return Array.isArray(value) && value.every(isHistoryEntry)
+}
+
+function isProgress(value: unknown): value is Progress {
+  if (!value || typeof value !== "object") return false
+  const p = value as Record<string, unknown>
+  return (
+    typeof p.currentTime === "number" &&
+    typeof p.duration === "number" &&
+    typeof p.percent === "number" &&
+    typeof p.completed === "boolean"
+  )
+}
+
+function isProgressMap(value: unknown): value is Record<string, Progress> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  return Object.values(value as Record<string, unknown>).every(isProgress)
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((s) => typeof s === "string")
 }
 
 function write(key: string, value: unknown) {
@@ -47,13 +85,13 @@ function write(key: string, value: unknown) {
 }
 
 export function addHistory(entry: Omit<HistoryEntry, "lastWatchedAt">) {
-  const items = read<HistoryEntry[]>(HISTORY_KEY, [])
+  const items = read<HistoryEntry[]>(HISTORY_KEY, [], isHistory)
   const next = [{ ...entry, lastWatchedAt: new Date().toISOString() }, ...items.filter((i) => !(i.id === entry.id && i.type === entry.type))]
   write(HISTORY_KEY, next.slice(0, MAX_HISTORY))
 }
 
 export function getHistory(): HistoryEntry[] {
-  return read<HistoryEntry[]>(HISTORY_KEY, [])
+  return read<HistoryEntry[]>(HISTORY_KEY, [], isHistory)
 }
 
 export function clearHistory() {
@@ -68,24 +106,18 @@ export function parseHistoryImport(text: string): HistoryEntry[] | null {
   try {
     const parsed: unknown = JSON.parse(text)
     if (!Array.isArray(parsed)) return null
-    if (
-      !parsed.every(
-        (e) =>
-          e &&
-          typeof e.id === "number" &&
-          (e.type === "movie" || e.type === "tv") &&
-          typeof e.title === "string",
-      )
-    )
-      return null
-    return parsed as HistoryEntry[]
+    // Must match `isHistoryEntry` exactly: `setHistory` stores this array and
+    // `getHistory` re-validates on read, so a loosely-typed import would be
+    // silently dropped the next time history is loaded.
+    if (!parsed.every(isHistoryEntry)) return null
+    return parsed
   } catch {
     return null
   }
 }
 
 export function removeFromHistory(id: number, type: "movie" | "tv") {
-  const items = read<HistoryEntry[]>(HISTORY_KEY, [])
+  const items = read<HistoryEntry[]>(HISTORY_KEY, [], isHistory)
   write(
     HISTORY_KEY,
     items.filter((i) => !(i.id === id && i.type === type)),
@@ -93,7 +125,7 @@ export function removeFromHistory(id: number, type: "movie" | "tv") {
 }
 
 export function removeProgressFor(id: number, type: "movie" | "tv") {
-  const all = read<Record<string, Progress>>(PROGRESS_KEY, {})
+  const all = read<Record<string, Progress>>(PROGRESS_KEY, {}, isProgressMap)
   const prefix = `${type}:${id}`
   const next: Record<string, Progress> = {}
   for (const key of Object.keys(all)) {
@@ -106,11 +138,11 @@ export function removeProgressFor(id: number, type: "movie" | "tv") {
 const purgeTag = (id: number, type: "movie" | "tv") => `${type}:${id}`
 
 export function isProgressPurged(id: number, type: "movie" | "tv"): boolean {
-  return read<string[]>(PURGE_KEY, []).includes(purgeTag(id, type))
+  return read<string[]>(PURGE_KEY, [], isStringArray).includes(purgeTag(id, type))
 }
 
 export function markProgressPurged(id: number, type: "movie" | "tv") {
-  const items = read<string[]>(PURGE_KEY, [])
+  const items = read<string[]>(PURGE_KEY, [], isStringArray)
   const tag = purgeTag(id, type)
   if (!items.includes(tag)) write(PURGE_KEY, [...items, tag])
 }
@@ -119,7 +151,7 @@ export function clearProgressPurge(id: number, type: "movie" | "tv") {
   const tag = purgeTag(id, type)
   write(
     PURGE_KEY,
-    read<string[]>(PURGE_KEY, []).filter((t) => t !== tag),
+    read<string[]>(PURGE_KEY, [], isStringArray).filter((t) => t !== tag),
   )
 }
 
@@ -137,7 +169,7 @@ function progressKey(id: number, type: "movie" | "tv", season?: number, episode?
 }
 
 export function getProgress(id: number, type: "movie" | "tv", season?: number, episode?: number): Progress | undefined {
-  const all = read<Record<string, Progress>>(PROGRESS_KEY, {})
+  const all = read<Record<string, Progress>>(PROGRESS_KEY, {}, isProgressMap)
   return all[progressKey(id, type, season, episode)]
 }
 
@@ -146,7 +178,7 @@ export function updateProgress(
   type: "movie" | "tv",
   patch: Omit<Partial<Progress>, "lastUpdated"> & { currentTime: number; duration: number },
 ) {
-  const all = read<Record<string, Progress>>(PROGRESS_KEY, {})
+  const all = read<Record<string, Progress>>(PROGRESS_KEY, {}, isProgressMap)
   const key = progressKey(id, type, patch.season, patch.episode)
   const prev = all[key] || { currentTime: 0, duration: 0, percent: 0, completed: false }
   const percent = patch.duration > 0 ? Math.min((patch.currentTime / patch.duration) * 100, 100) : prev.percent
@@ -161,7 +193,7 @@ export function updateProgress(
 }
 
 export function getAllProgress(): Record<string, Progress> {
-  return read<Record<string, Progress>>(PROGRESS_KEY, {})
+  return read<Record<string, Progress>>(PROGRESS_KEY, {}, isProgressMap)
 }
 
 export function formatTime(seconds: number): string {

@@ -6,6 +6,7 @@ const BROWSER_UA =
 
 const ALLOWED_HOSTS = new Set([
   "cinesrc.st",
+  "vidfast.vc",
   "vidfast.pro",
   "player.vidlove.cc",
   "vidlove.cc",

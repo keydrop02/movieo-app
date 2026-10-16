@@ -5,7 +5,9 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Play, Volume2, VolumeX, Info, ArrowLeft, ChevronUp, ChevronDown } from "lucide-react"
 import type { MediaItem, Video } from "@/lib/tmdb/types"
+import { img } from "@/lib/tmdb/images"
 import { mediaUrl, rateColor } from "@/lib/utils"
+import { reportError } from "@/lib/error-reporting"
 import { loadYtApi } from "@/lib/youtube"
 import Link from "next/link"
 
@@ -18,7 +20,7 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [muted, setMuted] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
-  const fetchedRef = useRef<Set<number>>(new Set())
+  const fetchedRef = useRef<Set<string>>(new Set())
   const router = useRouter()
 
   const scrollTo = (idx: number) => {
@@ -31,12 +33,15 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
   useEffect(() => {
     const idx = activeIdx
     const item = enriched[idx]
-    if (!item || fetchedRef.current.has(item.id)) return
-    fetchedRef.current.add(item.id)
+    if (!item) return
+    const key = `${item.kind}:${item.id}`
+    if (fetchedRef.current.has(key)) return
+    fetchedRef.current.add(key)
 
     ;(async () => {
       try {
         const res = await fetch(`/api/detail/${item.kind}/${item.id}`)
+        if (!res.ok) throw new Error(`detail ${res.status}`)
         const detail = await res.json()
         const trailer = (detail.videos ?? []).find(
           (v: Video) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")
@@ -46,7 +51,8 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
           next[idx] = { ...next[idx], trailer }
           return next
         })
-      } catch {
+      } catch (err) {
+        reportError("shorts.load-trailer", err, "warn")
         setEnriched((prev) => {
           const next = [...prev]
           next[idx] = { ...next[idx], trailer: null }
@@ -79,6 +85,7 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
     <div className="relative h-dvh overflow-hidden bg-black">
       <button
         onClick={() => router.back()}
+        aria-label="Back"
         className="absolute top-4 left-4 z-30 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer"
       >
         <ArrowLeft className="w-5 h-5" />
@@ -88,6 +95,7 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
         <button
           onClick={() => scrollTo(Math.max(0, activeIdx - 1))}
           disabled={activeIdx === 0}
+          aria-label="Previous"
           className="w-9 h-9 rounded-full bg-black/55 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
         >
           <ChevronUp className="w-5 h-5" />
@@ -95,6 +103,7 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
         <button
           onClick={() => scrollTo(Math.min(enriched.length - 1, activeIdx + 1))}
           disabled={activeIdx === enriched.length - 1}
+          aria-label="Next"
           className="w-9 h-9 rounded-full bg-black/55 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
         >
           <ChevronDown className="w-5 h-5" />
@@ -107,7 +116,7 @@ export function ShortsFeed({ items }: { items: MediaItem[] }) {
       >
       {enriched.map((item, i) => (
         <ShortCard
-          key={item.id}
+          key={`${item.kind}-${item.id}`}
           item={item}
           active={i === activeIdx}
           muted={muted}
@@ -135,11 +144,7 @@ function ShortCard({
   const readyRef = useRef(false)
   const trailerKey = item.trailer?.key ?? null
   const playing = active && !!trailerKey
-  const backdrop = item.backdrop_path
-    ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
-    : item.poster_path
-      ? `https://image.tmdb.org/t/p/w780${item.poster_path}`
-      : null
+  const backdrop = img(item.backdrop_path, "w780") ?? img(item.poster_path, "w780")
 
   const mutedRef = useRef(muted)
   useEffect(() => { mutedRef.current = muted })

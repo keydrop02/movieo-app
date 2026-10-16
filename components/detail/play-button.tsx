@@ -3,7 +3,7 @@
 import { useCallback, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { Play } from "lucide-react"
-import { PillButton } from "@/components/pill"
+import { pillClass } from "@/components/pill"
 import { getHistory } from "@/lib/watch-store"
 
 const noopSubscribe = () => () => {}
@@ -31,11 +31,9 @@ export function PlayButton({
   const inHistory = useSyncExternalStore(noopSubscribe, getSnapshot, () => false)
 
   return (
-    <Link href={href}>
-      <PillButton size="md" className={className}>
-        <Play className="w-5 h-5 mr-1.5 fill-current" />
-        <span>{inHistory ? "Resume" : "Play"}</span>
-      </PillButton>
+    <Link href={href} className={pillClass("primary", "md", className)}>
+      <Play className="w-5 h-5 mr-1.5 fill-current" />
+      <span>{inHistory ? "Resume" : "Play"}</span>
     </Link>
   )
 }
